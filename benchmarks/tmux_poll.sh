@@ -47,36 +47,49 @@ echo "warming up..."
 tmux -L "$SOCKET_NAME" list-panes -a -F "$FORMAT_STRING" >/dev/null
 
 echo "running list-panes benchmark..."
-durations_ms=()
-for _ in $(seq 1 "$RUNS"); do
-  start_ns="$(date +%s%N)"
-  tmux -L "$SOCKET_NAME" list-panes -a -F "$FORMAT_STRING" >/dev/null
-  end_ns="$(date +%s%N)"
-  durations_ms+=( $(((end_ns - start_ns) / 1000000)) )
-done
+SOCKET_NAME="$SOCKET_NAME" FORMAT_STRING="$FORMAT_STRING" RUNS="$RUNS" python3 - <<'PY'
+import os
+import subprocess
+import time
 
-printf "%s\n" "${durations_ms[@]}" | sort -n | awk -v n="$RUNS" '
-  { a[NR] = $1; sum += $1 }
-  END {
-    if (n < 1) { print "no samples"; exit 1 }
+socket_name = os.environ["SOCKET_NAME"]
+format_string = os.environ["FORMAT_STRING"]
+runs = int(os.environ["RUNS"])
 
-    p50i = int(0.50 * n + 0.5); if (p50i < 1) p50i = 1; if (p50i > n) p50i = n
-    p95i = int(0.95 * n + 0.5); if (p95i < 1) p95i = 1; if (p95i > n) p95i = n
-    p99i = int(0.99 * n + 0.5); if (p99i < 1) p99i = 1; if (p99i > n) p99i = n
+cmd = f'tmux -L "{socket_name}" list-panes -a -F "{format_string}"'
 
-    avg = sum / n
-    min = a[1]
-    max = a[n]
+durations_ms = []
+for _ in range(runs):
+    start_ns = time.perf_counter_ns()
+    subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    end_ns = time.perf_counter_ns()
+    durations_ms.append((end_ns - start_ns) / 1_000_000.0)
 
-    print "results_ms:"
-    print "  min:", min
-    print "  p50:", a[p50i]
-    print "  p95:", a[p95i]
-    print "  p99:", a[p99i]
-    print "  max:", max
-    printf "  avg: %.2f\n", avg
-  }
-'
+durations_ms.sort()
+
+def idx_for_percentile(p: float) -> int:
+    i_1_based = int(p * runs + 0.5)
+    if i_1_based < 1:
+        i_1_based = 1
+    if i_1_based > runs:
+        i_1_based = runs
+    return i_1_based - 1
+
+min_ms = durations_ms[0]
+max_ms = durations_ms[-1]
+avg_ms = sum(durations_ms) / runs
+p50_ms = durations_ms[idx_for_percentile(0.50)]
+p95_ms = durations_ms[idx_for_percentile(0.95)]
+p99_ms = durations_ms[idx_for_percentile(0.99)]
+
+print("results_ms:")
+print(f"  min: {min_ms:.2f}")
+print(f"  p50: {p50_ms:.2f}")
+print(f"  p95: {p95_ms:.2f}")
+print(f"  p99: {p99_ms:.2f}")
+print(f"  max: {max_ms:.2f}")
+print(f"  avg: {avg_ms:.2f}")
+PY
 
 if [[ "$MEASURE_CPU" == "1" ]]; then
   echo

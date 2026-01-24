@@ -17,3 +17,7 @@ daemon/target/
 # beads local runtime files
 .beads/.local_version
 .beads/daemon.log
+.beads/daemon-error
+
+# local build outputs
+a.out

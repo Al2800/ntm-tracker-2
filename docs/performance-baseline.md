@@ -30,12 +30,12 @@ Environment:
 - `FORMAT_STRING`: `#{session_name}|#{window_index}|#{pane_index}|#{pane_id}|#{pane_active}|#{pane_dead}|#{pane_pid}|#{pane_current_command}|#{pane_current_path}|#{pane_title}`
 
 Latency (`RUNS=100`):
-- min: 8ms
-- p50: 10ms
-- p95: 13ms
-- p99: 15ms
-- max: 19ms
-- avg: 10.06ms
+- min: 7.61ms
+- p50: 9.13ms
+- p95: 12.34ms
+- p99: 15.00ms
+- max: 20.22ms
+- avg: 9.61ms
 
 CPU (1Hz polling for 300s):
 - cpu_seconds (user+sys): 1.67s
