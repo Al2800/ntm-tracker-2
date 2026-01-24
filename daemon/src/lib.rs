@@ -10,6 +10,7 @@ pub mod ntm;
 pub mod parsers;
 pub mod models;
 pub mod rpc;
+pub mod redaction;
 pub mod state;
 
 pub fn version() -> &'static str {

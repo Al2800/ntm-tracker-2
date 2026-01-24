@@ -1,5 +1,6 @@
 use crate::cache::Cache;
 use crate::models::pane::Pane;
+use crate::redaction::default_redactor;
 use crate::rpc::{parse_params, RpcContext, RpcError, RpcResult, CODE_NOT_FOUND};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -77,9 +78,10 @@ pub fn get(ctx: &RpcContext, params: Value) -> RpcResult<Value> {
 
 pub fn output_preview(_ctx: &RpcContext, params: Value) -> RpcResult<Value> {
     let params: PanePreviewParams = parse_params(params)?;
+    let preview = default_redactor().redact("");
     Ok(json!({
         "paneId": params.pane_id,
-        "preview": "",
+        "preview": preview,
         "redacted": true,
         "maxLines": params.max_lines.unwrap_or(0),
         "maxChars": params.max_chars.unwrap_or(0)
