@@ -1,0 +1,12 @@
+# bv (beads viewer) local config and caches
+.bv/
+
+# app build artifacts
+app/node_modules/
+app/.svelte-kit/
+app/build/
+app/dist/
+app/src-tauri/target/
+
+# spike build artifacts
+spikes/stdio_rpc/target/

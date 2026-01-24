@@ -1,0 +1,5 @@
+{
+  "identifier": "default",
+  "description": "Default permissions for NTM Tracker",
+  "permissions": ["core:default"]
+}

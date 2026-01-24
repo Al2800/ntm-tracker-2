@@ -1,0 +1,19 @@
+[package]
+name = "ntm-tracker"
+version = "0.1.0"
+description = "NTM Tracker desktop app"
+authors = ["NTM Tracker Contributors"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2" }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2" }
+tauri-plugin-notification = "2"
+tauri-plugin-shell = "2"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
