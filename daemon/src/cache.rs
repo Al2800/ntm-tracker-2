@@ -90,6 +90,10 @@ impl Cache {
         }
     }
 
+    pub fn all_sessions(&self) -> Vec<Session> {
+        self.sessions.iter().map(|entry| entry.value().clone()).collect()
+    }
+
     pub fn remove_session(&self, session_uid: &str) {
         self.sessions.remove(session_uid);
     }
@@ -106,6 +110,10 @@ impl Cache {
             self.pane_misses.fetch_add(1, Ordering::Relaxed);
             None
         }
+    }
+
+    pub fn all_panes(&self) -> Vec<Pane> {
+        self.panes.iter().map(|entry| entry.value().clone()).collect()
     }
 
     pub fn remove_pane(&self, pane_uid: &str) {

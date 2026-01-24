@@ -9,6 +9,7 @@ pub mod detector;
 pub mod ntm;
 pub mod parsers;
 pub mod models;
+pub mod rpc;
 pub mod state;
 
 pub fn version() -> &'static str {
