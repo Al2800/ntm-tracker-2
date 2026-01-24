@@ -2,6 +2,7 @@ pub const APP_NAME: &str = "ntm-tracker-daemon";
 
 pub mod cache;
 pub mod bus;
+pub mod command;
 pub mod db;
 pub mod detector;
 pub mod models;
