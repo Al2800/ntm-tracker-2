@@ -1,0 +1,37 @@
+{
+  "session": "test-session",
+  "captured_at": "2026-01-24T23:00:00.000000000Z",
+  "description": "Synthetic sample showing compact detection trigger patterns",
+  "panes": {
+    "0": {
+      "type": "claude",
+      "state": "active",
+      "lines": [
+        "Working on the authentication module...",
+        "",
+        "Context left until auto-compact: 15%",
+        "",
+        "I notice the context is getting full. Let me summarize the key points",
+        "before auto-compaction occurs:",
+        "",
+        "1. Authentication service in src/auth.ts",
+        "2. JWT token handling",
+        "3. User session management",
+        "",
+        "The context will auto-compact shortly.",
+        "",
+        "Context left until auto-compact: 4%",
+        "",
+        "──────────────────────────────────────────────────────────────────",
+        "  Context auto-compacting...",
+        "──────────────────────────────────────────────────────────────────",
+        "",
+        "Context has been compacted. Previous conversation summarized.",
+        "",
+        "I'm Claude, your AI assistant. Based on my summary, we were working",
+        "on an authentication module. How can I help you continue?"
+      ],
+      "truncated": false
+    }
+  }
+}

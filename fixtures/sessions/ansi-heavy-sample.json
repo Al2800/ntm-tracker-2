@@ -1,0 +1,29 @@
+{
+  "session": "test-session",
+  "captured_at": "2026-01-24T23:03:00.000000000Z",
+  "description": "Sample with ANSI escape codes for color/formatting",
+  "panes": {
+    "0": {
+      "type": "claude",
+      "state": "active",
+      "lines": [
+        "\u001b[38;2;137;180;250m●\u001b[0m \u001b[1mRunning tests...\u001b[0m",
+        "",
+        "\u001b[32m✓\u001b[0m test_auth_login \u001b[90m(42ms)\u001b[0m",
+        "\u001b[32m✓\u001b[0m test_auth_logout \u001b[90m(15ms)\u001b[0m",
+        "\u001b[31m✗\u001b[0m test_auth_refresh \u001b[90m(102ms)\u001b[0m",
+        "  \u001b[31mError: Token expired\u001b[0m",
+        "  \u001b[90mat src/auth.ts:42\u001b[0m",
+        "\u001b[32m✓\u001b[0m test_user_create \u001b[90m(28ms)\u001b[0m",
+        "",
+        "\u001b[1mTest Results:\u001b[0m \u001b[32m3 passed\u001b[0m, \u001b[31m1 failed\u001b[0m",
+        "",
+        "\u001b[38;2;249;226;175m⚠\u001b[0m \u001b[33mWarning:\u001b[0m Deprecated API usage detected",
+        "\u001b[38;2;243;139;168m!\u001b[0m \u001b[31mCritical:\u001b[0m Security vulnerability in dependency",
+        "",
+        "\u001b[48;2;49;50;68m\u001b[38;2;205;214;244m Progress: ████████░░ 80% \u001b[0m"
+      ],
+      "truncated": false
+    }
+  }
+}

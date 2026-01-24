@@ -1,0 +1,36 @@
+{
+  "source_file": "sessions/escalation-sample.json",
+  "parse_results": {
+    "pane_0": {
+      "agent_type": "claude",
+      "status": "waiting",
+      "detections": {
+        "compact_events": [],
+        "escalations": [
+          {
+            "type": "user_choice_required",
+            "prompt": "Which authentication method should we use?",
+            "options": ["OAuth 2.0 (Recommended)", "JWT with refresh tokens", "Session-based auth", "Other"],
+            "line_index": 4
+          }
+        ]
+      }
+    },
+    "pane_1": {
+      "agent_type": "codex",
+      "status": "waiting",
+      "detections": {
+        "compact_events": [],
+        "escalations": [
+          {
+            "type": "permission_error",
+            "error": "EACCES permission denied /etc/hosts",
+            "line_index": 0
+          }
+        ]
+      }
+    }
+  },
+  "expected_compact_count": 0,
+  "expected_escalation_count": 2
+}

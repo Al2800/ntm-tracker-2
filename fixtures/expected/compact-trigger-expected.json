@@ -1,0 +1,34 @@
+{
+  "source_file": "sessions/compact-trigger-sample.json",
+  "parse_results": {
+    "pane_0": {
+      "agent_type": "claude",
+      "status": "active",
+      "detections": {
+        "compact_events": [
+          {
+            "type": "context_warning",
+            "context_percent": 15,
+            "line_index": 2
+          },
+          {
+            "type": "context_warning",
+            "context_percent": 4,
+            "line_index": 12
+          },
+          {
+            "type": "compact_triggered",
+            "line_index": 15
+          },
+          {
+            "type": "compact_completed",
+            "line_index": 18
+          }
+        ],
+        "escalations": []
+      }
+    }
+  },
+  "expected_compact_count": 1,
+  "expected_escalation_count": 0
+}

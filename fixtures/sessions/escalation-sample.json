@@ -1,0 +1,49 @@
+{
+  "session": "test-session",
+  "captured_at": "2026-01-24T23:01:00.000000000Z",
+  "description": "Synthetic sample showing escalation/human-input-required patterns",
+  "panes": {
+    "0": {
+      "type": "claude",
+      "state": "waiting",
+      "lines": [
+        "I've completed the analysis of the codebase structure.",
+        "",
+        "However, I need your input on a few things:",
+        "",
+        "? Which authentication method should we use?",
+        "  > OAuth 2.0 (Recommended)",
+        "    JWT with refresh tokens",
+        "    Session-based auth",
+        "    Other",
+        "",
+        "Please select an option to continue.",
+        "",
+        "──────────────────────────────────────────────────────────────────",
+        "> Waiting for input...",
+        "──────────────────────────────────────────────────────────────────"
+      ],
+      "truncated": false
+    },
+    "1": {
+      "type": "codex",
+      "state": "waiting",
+      "lines": [
+        "Error: EACCES permission denied /etc/hosts",
+        "",
+        "I encountered a permission error. This operation requires elevated",
+        "privileges that I don't have.",
+        "",
+        "Options:",
+        "1. Run this command manually with sudo",
+        "2. Skip this step and continue",
+        "3. Provide alternative approach",
+        "",
+        "How would you like to proceed?",
+        "",
+        "Waiting for user response..."
+      ],
+      "truncated": false
+    }
+  }
+}

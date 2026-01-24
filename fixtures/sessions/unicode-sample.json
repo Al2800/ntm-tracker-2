@@ -1,0 +1,36 @@
+{
+  "session": "test-session",
+  "captured_at": "2026-01-24T23:04:00.000000000Z",
+  "description": "Sample with Unicode characters and emoji",
+  "panes": {
+    "0": {
+      "type": "claude",
+      "state": "active",
+      "lines": [
+        "🚀 Starting deployment...",
+        "",
+        "📁 Processing files:",
+        "  ├── 文件处理.ts (Chinese)",
+        "  ├── Привет_мир.rs (Russian)",
+        "  ├── مرحبا.py (Arabic)",
+        "  └── 日本語テスト.js (Japanese)",
+        "",
+        "✅ Build successful!",
+        "⚠️  Warning: 2 deprecation notices",
+        "❌ Error in: λ-calculus.hs",
+        "",
+        "📊 Statistics:",
+        "  • Lines of code: 10,234",
+        "  • Test coverage: 87.5%",
+        "  • Complexity: ∞ → 42",
+        "",
+        "🎉 Deployment complete! 🎊",
+        "",
+        "──────────────────────────────────────────────────────────────────",
+        "💡 Tip: Use `→` for arrow functions, `λ` for lambdas",
+        "──────────────────────────────────────────────────────────────────"
+      ],
+      "truncated": false
+    }
+  }
+}

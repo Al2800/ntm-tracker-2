@@ -1,0 +1,1 @@
+S:cuas-sim|A:2/3|W:2|I:0|E:0|C:0%|B:R0/I0/B0|M:0|!:0;S:ntracker3|A:3/6|W:3|I:0|E:0|C:0%|B:R0/I0/B0|M:0|!:0;S:speedread-ios|A:0/2|W:0|I:0|E:0|C:0%|B:R0/I0/B0|M:0|!:0

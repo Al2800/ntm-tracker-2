@@ -1,0 +1,155 @@
+{
+  "generated_at": "2026-01-24T23:29:01.740713478Z",
+  "system": {
+    "version": "1.2.0",
+    "commit": "d78257aa8d5077fee2f62a5ff3278e38fdec5732",
+    "build_date": "2025-12-14T17:14:09Z",
+    "go_version": "go1.25.5",
+    "os": "linux",
+    "arch": "amd64",
+    "tmux_available": true
+  },
+  "sessions": [
+    {
+      "name": "cuas-sim",
+      "exists": true,
+      "windows": 1,
+      "panes": 3,
+      "agents": [
+        {
+          "type": "unknown",
+          "pane": "%6",
+          "window": 0,
+          "pane_idx": 0,
+          "is_active": true
+        },
+        {
+          "type": "claude",
+          "pane": "%7",
+          "window": 0,
+          "pane_idx": 1,
+          "is_active": false
+        },
+        {
+          "type": "claude",
+          "pane": "%8",
+          "window": 0,
+          "pane_idx": 2,
+          "is_active": false
+        }
+      ]
+    },
+    {
+      "name": "ntracker3",
+      "exists": true,
+      "attached": true,
+      "windows": 1,
+      "panes": 6,
+      "agents": [
+        {
+          "type": "unknown",
+          "pane": "%0",
+          "window": 0,
+          "pane_idx": 0,
+          "is_active": false
+        },
+        {
+          "type": "codex",
+          "pane": "%1",
+          "window": 0,
+          "pane_idx": 1,
+          "is_active": false
+        },
+        {
+          "type": "codex",
+          "pane": "%2",
+          "window": 0,
+          "pane_idx": 2,
+          "is_active": false
+        },
+        {
+          "type": "codex",
+          "pane": "%3",
+          "window": 0,
+          "pane_idx": 3,
+          "is_active": false
+        },
+        {
+          "type": "unknown",
+          "pane": "%4",
+          "window": 0,
+          "pane_idx": 4,
+          "is_active": true
+        },
+        {
+          "type": "unknown",
+          "pane": "%5",
+          "window": 0,
+          "pane_idx": 5,
+          "is_active": false
+        }
+      ]
+    },
+    {
+      "name": "speedread-ios",
+      "exists": true,
+      "attached": true,
+      "windows": 1,
+      "panes": 2,
+      "agents": [
+        {
+          "type": "unknown",
+          "pane": "%9",
+          "window": 0,
+          "pane_idx": 0,
+          "is_active": false
+        },
+        {
+          "type": "unknown",
+          "pane": "%10",
+          "window": 0,
+          "pane_idx": 1,
+          "is_active": true
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_sessions": 3,
+    "total_agents": 11,
+    "attached_count": 2,
+    "claude_count": 2,
+    "codex_count": 3,
+    "gemini_count": 0,
+    "cursor_count": 0,
+    "windsurf_count": 0,
+    "aider_count": 0
+  },
+  "beads": {
+    "available": true,
+    "project": "/home/agent/projects/ntracker3"
+  },
+  "graph_metrics": {
+    "top_bottlenecks": [
+      {
+        "id": "bd-2ml.3.6",
+        "score": 28
+      },
+      {
+        "id": "bd-2ml.3.11",
+        "score": 21
+      },
+      {
+        "id": "bd-2ml.4.15",
+        "score": 20
+      }
+    ],
+    "keystones_count": 50,
+    "health_status": "unknown",
+    "drift_message": "Warning: skipping invalid issue on line 1: invalid status: tombstone\nError: No baseline found.\nCreate one with: bv --save-baseline \"description\""
+  },
+  "agent_mail": {
+    "available": false,
+    "server_url": "http://127.0.0.1:8765/mcp/"
+  }
+}

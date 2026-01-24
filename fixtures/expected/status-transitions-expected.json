@@ -1,0 +1,30 @@
+{
+  "source_file": "sessions/status-transitions-sample.json",
+  "parse_results": {
+    "pane_0": {
+      "agent_type": "claude",
+      "status": "active",
+      "indicators": ["analyzing", "reading", "processing"]
+    },
+    "pane_1": {
+      "agent_type": "codex",
+      "status": "idle",
+      "indicators": ["task_completed", "ready_for_next", "prompt_visible"]
+    },
+    "pane_2": {
+      "agent_type": "unknown",
+      "status": "idle",
+      "indicators": ["shell_prompt_visible", "no_agent_detected"]
+    },
+    "pane_3": {
+      "agent_type": "gemini",
+      "status": "waiting",
+      "indicators": ["awaiting_decision", "options_presented"]
+    }
+  },
+  "status_distribution": {
+    "active": 1,
+    "idle": 2,
+    "waiting": 1
+  }
+}

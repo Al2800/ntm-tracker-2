@@ -1,0 +1,154 @@
+{
+  "ts": "2026-01-24T23:30:05Z",
+  "sessions": [
+    {
+      "name": "cuas-sim",
+      "attached": false,
+      "agents": [
+        {
+          "pane": "0.0",
+          "type": "unknown",
+          "type_confidence": 0,
+          "type_method": "unknown",
+          "state": "active",
+          "last_output_age_sec": -1,
+          "output_tail_lines": 27,
+          "current_bead": null,
+          "pending_mail": 0
+        },
+        {
+          "pane": "0.1",
+          "type": "claude",
+          "type_confidence": 0.95,
+          "type_method": "process",
+          "state": "active",
+          "last_output_age_sec": -1,
+          "output_tail_lines": 22,
+          "current_bead": null,
+          "pending_mail": 0
+        },
+        {
+          "pane": "0.2",
+          "type": "claude",
+          "type_confidence": 0.95,
+          "type_method": "process",
+          "state": "active",
+          "last_output_age_sec": -1,
+          "output_tail_lines": 16,
+          "current_bead": null,
+          "pending_mail": 0
+        }
+      ]
+    },
+    {
+      "name": "ntracker3",
+      "attached": true,
+      "agents": [
+        {
+          "pane": "0.0",
+          "type": "unknown",
+          "type_confidence": 0,
+          "type_method": "unknown",
+          "state": "active",
+          "last_output_age_sec": -1,
+          "output_tail_lines": 60,
+          "current_bead": null,
+          "pending_mail": 0
+        },
+        {
+          "pane": "0.1",
+          "type": "codex",
+          "type_confidence": 0.9,
+          "type_method": "title",
+          "state": "active",
+          "last_output_age_sec": -1,
+          "output_tail_lines": 60,
+          "current_bead": null,
+          "pending_mail": 0
+        },
+        {
+          "pane": "0.2",
+          "type": "codex",
+          "type_confidence": 0.9,
+          "type_method": "title",
+          "state": "active",
+          "last_output_age_sec": -1,
+          "output_tail_lines": 60,
+          "current_bead": null,
+          "pending_mail": 0
+        },
+        {
+          "pane": "0.3",
+          "type": "codex",
+          "type_confidence": 0.9,
+          "type_method": "title",
+          "state": "active",
+          "last_output_age_sec": -1,
+          "output_tail_lines": 60,
+          "current_bead": null,
+          "pending_mail": 0
+        },
+        {
+          "pane": "0.4",
+          "type": "claude",
+          "type_confidence": 0.95,
+          "type_method": "process",
+          "state": "active",
+          "last_output_age_sec": -1,
+          "output_tail_lines": 58,
+          "current_bead": null,
+          "pending_mail": 0
+        },
+        {
+          "pane": "0.5",
+          "type": "claude",
+          "type_confidence": 0.95,
+          "type_method": "process",
+          "state": "active",
+          "last_output_age_sec": -1,
+          "output_tail_lines": 58,
+          "current_bead": null,
+          "pending_mail": 0
+        }
+      ]
+    },
+    {
+      "name": "speedread-ios",
+      "attached": true,
+      "agents": [
+        {
+          "pane": "0.0",
+          "type": "unknown",
+          "type_confidence": 0,
+          "type_method": "unknown",
+          "state": "active",
+          "last_output_age_sec": -1,
+          "output_tail_lines": 15,
+          "current_bead": null,
+          "pending_mail": 0
+        },
+        {
+          "pane": "0.1",
+          "type": "claude",
+          "type_confidence": 0.95,
+          "type_method": "process",
+          "state": "active",
+          "last_output_age_sec": -1,
+          "output_tail_lines": 59,
+          "current_bead": null,
+          "pending_mail": 0
+        }
+      ]
+    }
+  ],
+  "beads_summary": {
+    "available": true,
+    "project": "/home/agent/projects/ntracker3"
+  },
+  "agent_mail": {
+    "available": false,
+    "reason": "agent mail server not available at http://127.0.0.1:8765/mcp/",
+    "project": "/home/agent/projects/ntracker3"
+  },
+  "alerts": []
+}
