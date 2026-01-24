@@ -1,0 +1,93 @@
+name: Fuzz Testing
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'daemon/src/**'
+      - 'daemon/fuzz/**'
+  pull_request:
+    paths:
+      - 'daemon/src/**'
+      - 'daemon/fuzz/**'
+  schedule:
+    # Run nightly at 3am UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fuzz:
+    name: Fuzz ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - fuzz_ntm_markdown
+          - fuzz_ntm_tail
+          - fuzz_tmux_panes
+          - fuzz_compact_detector
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            daemon/target
+          key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('daemon/Cargo.lock') }}
+
+      - name: Run fuzz target
+        working-directory: daemon
+        run: |
+          cargo +nightly fuzz run ${{ matrix.target }} -- -max_total_time=60
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crash-${{ matrix.target }}
+          path: daemon/fuzz/artifacts/${{ matrix.target }}/
+          if-no-files-found: ignore
+
+  fuzz-extended:
+    name: Extended Fuzz (nightly)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Run extended fuzzing (5min each)
+        working-directory: daemon
+        run: |
+          for target in fuzz_ntm_markdown fuzz_ntm_tail fuzz_tmux_panes fuzz_compact_detector; do
+            echo "Fuzzing $target for 300 seconds..."
+            cargo +nightly fuzz run $target -- -max_total_time=300
+          done
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crash-extended
+          path: daemon/fuzz/artifacts/
+          if-no-files-found: ignore

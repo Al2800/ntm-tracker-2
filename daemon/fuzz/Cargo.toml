@@ -1,0 +1,46 @@
+[package]
+name = "ntm-tracker-daemon-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+[dependencies.ntm-tracker-daemon]
+path = ".."
+
+[[bin]]
+name = "fuzz_ntm_markdown"
+path = "fuzz_targets/fuzz_ntm_markdown.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_ntm_tail"
+path = "fuzz_targets/fuzz_ntm_tail.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_tmux_panes"
+path = "fuzz_targets/fuzz_tmux_panes.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_compact_detector"
+path = "fuzz_targets/fuzz_compact_detector.rs"
+test = false
+doc = false
+bench = false
+
+[profile.release]
+debug = true

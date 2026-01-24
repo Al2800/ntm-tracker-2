@@ -1,0 +1,92 @@
+{
+  "session": "cuas-sim",
+  "captured_at": "2026-01-24T23:33:12.662782405Z",
+  "panes": {
+    "0": {
+      "type": "unknown",
+      "state": "active",
+      "lines": [
+        "-bash: /etc/bash.bashrc: line 72: syntax error near unexpected tok",
+        "en `('",
+        "-bash: /etc/bash.bashrc: line 72: `export PATH=\\/c/Users/Alastair/",
+        "bin:/mingw64/bin:/usr/local/bin:/usr/bin:/bin:/mingw64/bin:/usr/bi",
+        "n:/c/Users/Alastair/bin:/c/Python314/Scripts:/c/Python314:/c/WINDO",
+        "WS/system32:/c/WINDOWS:/c/WINDOWS/System32/Wbem:/c/WINDOWS/System3",
+        "2/WindowsPowerShell/v1.0:/c/WINDOWS/System32/OpenSSH:/c/Recovery/O",
+        "EM/Backup:/cmd:/c/Program Files/Amazon/AWSCLIV2:/c/Program Files/c",
+        "ursor/resources/app/bin:/c/Program Files/Docker/Docker/resources/b",
+        "in:/c/Program Files/nodejs:/c/ProgramData/chocolatey/bin:/c/Progra",
+        "m Files/NVIDIA Corporation/NVIDIA App/NvDLISR:/c/Program Files (x8",
+        "6)/NVIDIA Corporation/PhysX/Common:/c/Program Files/GitHub CLI:/c/",
+        "  TYPE PRI STATUS      ID",
+        "TITLE",
+        "",
+        "▸ 🚀 P0 ↪1 OPEN cuas-sim-0k0 EPIC: MVP Milestone -…   21h ago",
+        "  📋 P1 OPEN cuas-sim-c5f Security baseline: SBOM,…   21h ago",
+        "  📋 P1 OPEN cuas-sim-sds Compliance Gate: Separat…   21h ago",
+        "  📋 P1 OPEN cuas-sim-ed0 Compliance Gate: Audit l…   21h ago",
+        "  📋 P1 OPEN cuas-sim-ix1 Compliance Gate: Build-t…   21h ago",
+        "  🚀 P1 ⭐ OPEN cuas-sim-0zf EPIC: Alpha Milestone…   21h ago",
+        "  📋 P2 ↪1 OPEN cuas-sim-0zf.7 Alpha: Truth associ…   21h ago",
+        "  📋 P2 OPEN cuas-sim-0zf.6 Alpha: Acoustic sensor…   21h ago",
+        "  📋 P2 OPEN cuas-sim-0zf.5 Alpha: EO/IR sensor si…   21h ago",
+        "  📋 P2 OPEN cuas-sim-0zf.4 Alpha: Scenario editor…   21h ago",
+        "  📋 P2 OPEN cuas-sim-0zf.3 Alpha: Calibration wor…   21h ago",
+        " 📋 ALL  L:labels • h:detail  ℹ 1 alerts (!)  ⭐ v0.13.0  ○44 ◉5"
+      ],
+      "truncated": false
+    },
+    "1": {
+      "type": "unknown",
+      "state": "active",
+      "lines": [
+        "╭─ Claude Code ────────────────────────╮",
+        "│                                      │",
+        "│        Welcome back Alastair!        │",
+        "│                                      │",
+        "│                                      │",
+        "│              * ▐▛███▜▌ *             │",
+        "│             * ▝▜█████▛▘ *            │",
+        "│              *  ▘▘ ▝▝  *             │",
+        "│                                      │",
+        "│                                      │",
+        "│               Sonnet 4               │",
+        "│              Claude Max              │",
+        "│         ~/projects/cuas-sim          │",
+        "│                                      │",
+        "╰──────────────────────────────────────╯",
+        "",
+        "──────────────────────────────────────────────────────────────────",
+        "\u003e Try \"create a util logging.py that...\"",
+        "──────────────────────────────────────────────────────────────────",
+        "  ⏵⏵ bypass permissions on    ✗ Auto-update failed · Try claude",
+        "  (shift+tab to cycle)        doctor or npm i -g",
+        "                              @anthropic-ai/claude-code"
+      ],
+      "truncated": false
+    },
+    "2": {
+      "type": "unknown",
+      "state": "active",
+      "lines": [
+        "╭─── Claude Code v2.0.75 ──────────────────────────────────────────────────────╮",
+        "│                                               │ Tips for getting started     │",
+        "│             Welcome back Alastair!            │ Run /init to create a CLAUD… │",
+        "│                                               │ ──────────────────────────── │",
+        "│                  * ▐▛███▜▌ *                  │ Recent activity              │",
+        "│                 * ▝▜█████▛▘ *                 │ No recent activity           │",
+        "│                  *  ▘▘ ▝▝  *                  │                              │",
+        "│                                               │                              │",
+        "│   Sonnet 4 · Claude Max · Alastair Campbell   │                              │",
+        "│              ~/projects/cuas-sim              │                              │",
+        "╰──────────────────────────────────────────────────────────────────────────────╯",
+        "",
+        "─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+        "\u003e Try \"how does \u003cfilepath\u003e work?\"",
+        "─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────",
+        "  ⏵⏵ bypass permissions on (shift+tab to cycle)      ✗ Auto-update failed · Try claude doctor or npm i -g @anthropic-ai/claude-code"
+      ],
+      "truncated": false
+    }
+  }
+}
