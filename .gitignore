@@ -10,3 +10,10 @@ app/src-tauri/target/
 
 # spike build artifacts
 spikes/stdio_rpc/target/
+
+# daemon build artifacts
+daemon/target/
+
+# beads local runtime files
+.beads/.local_version
+.beads/daemon.log

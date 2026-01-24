@@ -1,0 +1,33 @@
+pub const APP_NAME: &str = "ntm-tracker-daemon";
+
+pub mod cache;
+pub mod db;
+pub mod models;
+pub mod state;
+
+pub fn version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+pub fn open_in_memory_db() -> rusqlite::Result<rusqlite::Connection> {
+    let conn = rusqlite::Connection::open_in_memory()?;
+    conn.execute("PRAGMA foreign_keys = ON;", [])?;
+    Ok(conn)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn version_is_non_empty() {
+        assert!(!version().is_empty());
+    }
+
+    #[test]
+    fn in_memory_db_opens() {
+        let conn = open_in_memory_db().expect("open in-memory db");
+        let result: i64 = conn.query_row("SELECT 1;", [], |row| row.get(0)).unwrap();
+        assert_eq!(result, 1);
+    }
+}
