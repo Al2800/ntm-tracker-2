@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "fixture": "status-snapshot.json",
+  "type": "status_snapshot",
+  "session_names": [
+    "cuas-sim",
+    "ntracker3",
+    "speedread-ios"
+  ],
+  "summary_expected": {
+    "total_sessions": 3,
+    "total_agents": 11,
+    "attached_count": 2,
+    "claude_count": 2,
+    "codex_count": 3
+  },
+  "notes": "Snapshot of NTM status JSON for metadata parsing."
+}

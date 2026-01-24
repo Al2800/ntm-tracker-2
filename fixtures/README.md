@@ -1,106 +1,62 @@
-# NTM Tracker Fixtures
+# Fixture Corpus
 
-Test fixtures for parser and detector golden tests.
+This folder contains captured (or synthetic) pane output used for parser and detector tests.
 
-## Directory Structure
+## Layout
 
-```
-fixtures/
-├── README.md           # This file
-├── ntm/                # NTM robot output format samples
-│   ├── robot-status.json
-│   ├── robot-markdown.md
-│   ├── robot-tail.json
-│   └── ...
-├── sessions/           # Pane output samples for detection tests
-│   ├── README.md
-│   ├── cuas-sim-claude.json      # Real Claude session
-│   ├── ntracker3-codex.json      # Real Codex session
-│   ├── compact-trigger-sample.json    # Synthetic compact detection
-│   ├── escalation-sample.json         # Synthetic escalation detection
-│   └── ...
-└── expected/           # Expected parse results
-    ├── compact-trigger-expected.json
-    ├── escalation-expected.json
-    └── status-transitions-expected.json
-```
+- `fixtures/sessions/*.json`
+  - Session snapshots with pane output lines.
+  - Schema (informal):
+    ```json
+    {
+      "session": "name",
+      "captured_at": "RFC3339 timestamp",
+      "description": "optional",
+      "panes": {
+        "0": { "type": "claude|codex|unknown", "state": "active|idle|waiting", "lines": ["..."], "truncated": false }
+      }
+    }
+    ```
+- `fixtures/expected/*.expected.json`
+  - Expected detector hits derived from the fixture lines.
+  - Schema (informal):
+    ```json
+    {
+      "schema_version": 1,
+      "fixture": "<fixture file>",
+      "session": "name",
+      "panes": {
+        "0": {
+          "compacts": [{"line_contains": "...", "reason": "compacting"}],
+          "escalations": [{"line_contains": "...", "severity": "warn"}],
+          "status_samples": [{"line_contains": "...", "expected_status": "waiting", "reason": "waiting_pattern"}]
+        }
+      }
+    }
+    ```
+  - `status-snapshot.expected.json` is a special case for the JSON status snapshot.
+  - Legacy files ending in `-expected.json` are older schemas kept for reference.
 
-## Fixture Types
+## Current Fixtures
 
-### NTM Robot Outputs (`ntm/`)
-Samples of NTM `--robot-*` command outputs for validating:
-- Output format parsing
-- Field extraction
-- Version compatibility
+- `ansi-heavy-sample.json` — ANSI escape sequences, no detector hits expected.
+- `compact-trigger-sample.json` — Compact warning + auto-compacting line.
+- `cuas-sim-claude.json` — Real claude session capture (parser robustness).
+- `escalation-sample.json` — Escalation prompts + fatal error line.
+- `ntracker3-codex.json` — Large codex session capture.
+- `shell-only-sample.json` — Shell-only output, no AI patterns.
+- `speedread-ios-mixed.json` — Mixed session capture.
+- `status-snapshot.json` — NTM status JSON snapshot (metadata parsing).
+- `status-transitions-sample.json` — Status detection patterns.
+- `unicode-sample.json` — Unicode + emoji output.
 
-See `ntm/README.md` for details.
+## Adding New Fixtures
 
-### Session Captures (`sessions/`)
-Pane output samples for testing:
-- Agent type detection
-- Status detection (active/idle/waiting)
-- Compact event detection
-- Escalation detection
-- ANSI escape code handling
-- Unicode handling
+1. Capture a pane snapshot into `fixtures/sessions/<name>.json`.
+2. Add a matching `fixtures/expected/<name>.expected.json` with detector expectations.
+3. Update this README with a short description.
 
-See `sessions/README.md` for details.
+## Notes
 
-### Expected Results (`expected/`)
-Expected parse results for golden tests. Each file corresponds to a session fixture and defines what the parser/detector should extract.
-
-## Coverage Summary
-
-| Category | Real Samples | Synthetic | Total |
-|----------|--------------|-----------|-------|
-| Claude sessions | 1 | 1 | 2 |
-| Codex sessions | 1 | 0 | 1 |
-| Mixed/shell panes | 2 | 2 | 4 |
-| Compact detection | 0 | 1 | 1 |
-| Escalation detection | 0 | 1 | 1 |
-| ANSI handling | 0 | 1 | 1 |
-| Unicode handling | 0 | 1 | 1 |
-| **Total session fixtures** | **4** | **7** | **11** |
-
-## Usage
-
-### Rust Tests
-```rust
-use std::fs;
-use serde_json::Value;
-
-fn load_fixture(path: &str) -> Value {
-    let content = fs::read_to_string(format!("fixtures/{}", path))
-        .expect("Failed to read fixture");
-    serde_json::from_str(&content).expect("Failed to parse fixture")
-}
-
-#[test]
-fn test_compact_detection() {
-    let session = load_fixture("sessions/compact-trigger-sample.json");
-    let expected = load_fixture("expected/compact-trigger-expected.json");
-
-    let result = detect_compacts(&session);
-    assert_eq!(
-        result.count,
-        expected["expected_compact_count"].as_u64().unwrap()
-    );
-}
-```
-
-## Sensitive Data
-
-All fixtures are reviewed before commit:
-- No API keys, tokens, or credentials
-- No personal information
-- Paths sanitized where practical
-- Real sessions captured from controlled test environments
-
-## Maintenance
-
-When adding new fixtures:
-1. Create session file in `sessions/`
-2. Create expected result in `expected/` (if applicable)
-3. Update `sessions/README.md` with description
-4. Update coverage table above
-5. Verify no sensitive data
+- These fixtures are **redacted/synthetic** where needed to avoid secrets.
+- Expected status results assume **recent activity** unless otherwise noted.

@@ -65,7 +65,9 @@
         "2. Leave it and add to .gitignore",
         "3. Something else",
         "",
-        "Awaiting your decision..."
+        "Awaiting your decision...",
+        "",
+        "Waiting for input (y/n)"
       ],
       "truncated": false
     }

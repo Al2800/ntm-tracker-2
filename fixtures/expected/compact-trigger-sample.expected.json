@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "fixture": "compact-trigger-sample.json",
+  "session": "test-session",
+  "panes": {
+    "0": {
+      "compacts": [
+        {
+          "line_contains": "Approaching context limit",
+          "reason": "approaching_limit",
+          "confidence": 0.4
+        },
+        {
+          "line_contains": "Context auto-compacting",
+          "reason": "compacting",
+          "confidence": 1.0
+        }
+      ],
+      "escalations": [],
+      "status_samples": []
+    }
+  },
+  "notes": "Compact warning + compacting line."
+}

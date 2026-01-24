@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "fixture": "status-transitions-sample.json",
+  "session": "test-session",
+  "panes": {
+    "0": {
+      "compacts": [],
+      "escalations": [],
+      "status_samples": [
+        {
+          "line_contains": "Processing 42 files",
+          "expected_status": "active",
+          "reason": "active_pattern"
+        }
+      ]
+    },
+    "1": {
+      "compacts": [],
+      "escalations": [],
+      "status_samples": []
+    },
+    "2": {
+      "compacts": [],
+      "escalations": [],
+      "status_samples": []
+    },
+    "3": {
+      "compacts": [],
+      "escalations": [],
+      "status_samples": [
+        {
+          "line_contains": "Waiting for input (y/n)",
+          "expected_status": "waiting",
+          "reason": "waiting_pattern"
+        }
+      ]
+    }
+  },
+  "notes": "Synthetic panes to exercise status detection paths."
+}

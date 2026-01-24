@@ -10,6 +10,7 @@
         "Working on the authentication module...",
         "",
         "Context left until auto-compact: 15%",
+        "Approaching context limit. Consider compacting soon.",
         "",
         "I notice the context is getting full. Let me summarize the key points",
         "before auto-compaction occurs:",

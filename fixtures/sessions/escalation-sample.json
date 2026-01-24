@@ -19,6 +19,8 @@
         "",
         "Please select an option to continue.",
         "",
+        "Please confirm delete (y/n)",
+        "",
         "──────────────────────────────────────────────────────────────────",
         "> Waiting for input...",
         "──────────────────────────────────────────────────────────────────"
@@ -30,6 +32,7 @@
       "state": "waiting",
       "lines": [
         "Error: EACCES permission denied /etc/hosts",
+        "fatal error: cannot proceed",
         "",
         "I encountered a permission error. This operation requires elevated",
         "privileges that I don't have.",

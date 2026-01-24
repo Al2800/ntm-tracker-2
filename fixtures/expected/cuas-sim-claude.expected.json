@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "fixture": "cuas-sim-claude.json",
+  "session": "cuas-sim",
+  "panes": {
+    "0": {
+      "compacts": [],
+      "escalations": [],
+      "status_samples": []
+    },
+    "1": {
+      "compacts": [],
+      "escalations": [],
+      "status_samples": []
+    },
+    "2": {
+      "compacts": [],
+      "escalations": [],
+      "status_samples": []
+    }
+  },
+  "notes": "Real session capture (claude) for parser robustness."
+}

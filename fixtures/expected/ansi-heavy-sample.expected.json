@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "fixture": "ansi-heavy-sample.json",
+  "session": "test-session",
+  "panes": {
+    "0": {
+      "compacts": [],
+      "escalations": [],
+      "status_samples": []
+    }
+  },
+  "notes": "ANSI heavy output; no detection patterns expected."
+}

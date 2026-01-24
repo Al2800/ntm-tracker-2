@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "fixture": "unicode-sample.json",
+  "session": "test-session",
+  "panes": {
+    "0": {
+      "compacts": [],
+      "escalations": [],
+      "status_samples": [
+        {
+          "line_contains": "Processing files",
+          "expected_status": "active",
+          "reason": "active_pattern"
+        }
+      ]
+    }
+  },
+  "notes": "Unicode/emoji output with active pattern line."
+}

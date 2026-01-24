@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "fixture": "ntracker3-codex.json",
+  "session": "ntracker3",
+  "panes": {
+    "0": {
+      "compacts": [],
+      "escalations": [],
+      "status_samples": []
+    },
+    "1": {
+      "compacts": [],
+      "escalations": [],
+      "status_samples": []
+    },
+    "2": {
+      "compacts": [],
+      "escalations": [],
+      "status_samples": []
+    },
+    "3": {
+      "compacts": [],
+      "escalations": [],
+      "status_samples": []
+    },
+    "4": {
+      "compacts": [],
+      "escalations": [],
+      "status_samples": []
+    },
+    "5": {
+      "compacts": [],
+      "escalations": [],
+      "status_samples": []
+    }
+  },
+  "notes": "Large real session capture (codex) for parser/regression coverage."
+}

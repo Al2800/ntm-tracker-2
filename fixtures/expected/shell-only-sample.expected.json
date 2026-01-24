@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "fixture": "shell-only-sample.json",
+  "session": "test-session",
+  "panes": {
+    "0": {
+      "compacts": [],
+      "escalations": [],
+      "status_samples": []
+    }
+  },
+  "notes": "Shell-only output; no AI patterns expected."
+}
