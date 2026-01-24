@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod daemon;
+mod transport;
 
 use commands::{
     daemon_health, daemon_start, daemon_stop, export_diagnostics, get_attach_command, get_settings,

@@ -58,7 +58,7 @@
           on:click={() => (showActive = !showActive)}
           type="button"
         >
-          <span class="h-2 w-2 rounded-full bg-emerald-400/70" />
+          <span class="h-2 w-2 rounded-full bg-emerald-400/70"></span>
           Active
         </button>
         <button
@@ -68,7 +68,7 @@
           on:click={() => (showCompacts = !showCompacts)}
           type="button"
         >
-          <span class="h-2 w-2 rounded-full bg-amber-400/70" />
+          <span class="h-2 w-2 rounded-full bg-amber-400/70"></span>
           Compacts
         </button>
       </div>
@@ -84,14 +84,14 @@
               class="w-2 rounded-sm bg-emerald-400/70"
               style={`height: ${barHeight(entry.activeMinutes)}px`}
               title={`Active: ${entry.activeMinutes}m | Compacts: ${entry.totalCompacts}`}
-            />
+            ></div>
           {/if}
           {#if showCompacts}
             <div
               class="w-2 rounded-sm bg-amber-400/70"
               style={`height: ${barHeight(entry.totalCompacts)}px`}
               title={`Active: ${entry.activeMinutes}m | Compacts: ${entry.totalCompacts}`}
-            />
+            ></div>
           {/if}
         </div>
         <span class="mt-2 text-[10px] text-slate-500">{labelFor(entry.bucket)}</span>

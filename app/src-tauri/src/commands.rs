@@ -1,6 +1,7 @@
+use crate::daemon::DaemonManager;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{fs, path::PathBuf, sync::Mutex};
+use std::{fs, path::PathBuf, sync::Mutex, time::Duration};
 use tauri::{AppHandle, Manager, State};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -37,7 +38,7 @@ pub struct HealthResponse {
 
 #[derive(Debug)]
 struct DaemonState {
-    running: bool,
+    manager: Option<DaemonManager>,
     last_error: Option<String>,
     settings: AppSettings,
 }
@@ -47,7 +48,7 @@ pub struct AppState(pub Mutex<DaemonState>);
 impl AppState {
     pub fn new(settings: AppSettings) -> Self {
         Self(Mutex::new(DaemonState {
-            running: false,
+            manager: None,
             last_error: None,
             settings,
         }))
@@ -94,7 +95,14 @@ pub async fn daemon_start(_app: AppHandle, state: State<'_, AppState>) -> Result
         .0
         .lock()
         .map_err(|_| "App state lock poisoned".to_string())?;
-    guard.running = true;
+    if let Some(manager) = guard.manager.as_ref() {
+        if manager.is_running() {
+            return Ok(());
+        }
+    }
+
+    let manager = DaemonManager::start(&guard.settings.transport)?;
+    guard.manager = Some(manager);
     guard.last_error = None;
     Ok(())
 }
@@ -105,7 +113,10 @@ pub async fn daemon_stop(_app: AppHandle, state: State<'_, AppState>) -> Result<
         .0
         .lock()
         .map_err(|_| "App state lock poisoned".to_string())?;
-    guard.running = false;
+    if let Some(manager) = guard.manager.as_ref() {
+        let _ = manager.stop();
+    }
+    guard.manager = None;
     Ok(())
 }
 
@@ -115,11 +126,19 @@ pub async fn daemon_health(_app: AppHandle, state: State<'_, AppState>) -> Resul
         .0
         .lock()
         .map_err(|_| "App state lock poisoned".to_string())?;
+
+    let Some(manager) = guard.manager.as_ref() else {
+        return Ok(HealthResponse {
+            status: "stopped".to_string(),
+            last_error: guard.last_error.clone(),
+        });
+    };
+
     Ok(HealthResponse {
-        status: if guard.running {
+        status: if manager.is_running() {
             "running".to_string()
         } else {
-            "stopped".to_string()
+            "error".to_string()
         },
         last_error: guard.last_error.clone(),
     })
@@ -132,17 +151,20 @@ pub async fn rpc_call(
     method: String,
     params: Value,
 ) -> Result<Value, String> {
-    let guard = state
+    let mut guard = state
         .0
         .lock()
         .map_err(|_| "App state lock poisoned".to_string())?;
-    if !guard.running {
+    let Some(manager) = guard.manager.as_ref() else {
         return Err("Daemon is not running".to_string());
+    };
+
+    let timeout = Duration::from_secs(15);
+    let result = manager.call(method, params, timeout);
+    if let Err(err) = &result {
+        guard.last_error = Some(err.clone());
     }
-    let _ = params;
-    Err(format!(
-        "RPC passthrough not implemented yet for method '{method}'"
-    ))
+    result
 }
 
 #[tauri::command]
