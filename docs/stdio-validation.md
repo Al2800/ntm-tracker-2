@@ -45,6 +45,27 @@ Notes:
 - Replace `Ubuntu` and path with your distro + repo location.
 - Ensure the daemon writes **only** JSON lines to stdout.
 
+## Windows Run Template (Fill In)
+
+Record the environment details and results for each Windows run.
+
+**Environment**
+- Windows version:
+- WSL version (`wsl --version`):
+- Distro:
+- CPU model:
+- Power plan:
+- VPN status:
+
+**Command**
+```powershell
+./spikes/stdio_rpc/target/release/stdio-rpc-spike client `
+  --pings 100 `
+  --rate-hz 100 `
+  --duration-secs 5 `
+  -- $daemon
+```
+
 ## Measurement Checklist
 
 Capture these metrics for each run:
