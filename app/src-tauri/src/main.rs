@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod bootstrap;
 mod commands;
 mod daemon;
 mod transport;
@@ -19,6 +20,7 @@ fn main() {
             app.manage(AppState::new(settings));
             tray::init(app.handle())?;
             tray::spawn_updater(app.handle().clone());
+            bootstrap::start(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

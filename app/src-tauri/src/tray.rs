@@ -1,3 +1,4 @@
+use crate::bootstrap;
 use crate::commands::AppState;
 use serde::Deserialize;
 use serde_json::Value;
@@ -191,6 +192,7 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
                     let _ = app.emit_all("tray:open-settings", ());
                 }
                 MENU_QUIT => {
+                    bootstrap::shutdown(app);
                     app.exit(0);
                 }
                 _ => {}

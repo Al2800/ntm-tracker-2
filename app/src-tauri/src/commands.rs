@@ -160,6 +160,9 @@ pub async fn rpc_call(
     let Some(manager) = guard.manager.as_ref() else {
         return Err("Daemon is not running".to_string());
     };
+    if !manager.is_running() {
+        return Err("Daemon health check failed".to_string());
+    }
 
     let timeout = Duration::from_secs(15);
     let result = manager.call(method, params, timeout);
