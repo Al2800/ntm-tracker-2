@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ntracker.local/schema/methods/stats.json",
+  "title": "Stats RPC Methods",
+  "description": "Usage statistics and analytics methods",
+  "definitions": {
+    "StatsSummaryParams": {
+      "type": "null"
+    },
+    "StatsSummaryResult": {
+      "type": "object",
+      "required": ["summary"],
+      "properties": {
+        "summary": {
+          "$ref": "types.json#/definitions/StatsSummary"
+        }
+      },
+      "additionalProperties": false
+    },
+    "StatsRangeParams": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Filter by session ID"
+        },
+        "start": {
+          "$ref": "types.json#/definitions/Timestamp",
+          "description": "Range start timestamp"
+        },
+        "end": {
+          "$ref": "types.json#/definitions/Timestamp",
+          "description": "Range end timestamp"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Maximum records to return"
+        }
+      },
+      "additionalProperties": false
+    },
+    "StatsHourlyResult": {
+      "type": "object",
+      "required": ["hourly"],
+      "properties": {
+        "hourly": {
+          "type": "array",
+          "items": {
+            "$ref": "types.json#/definitions/HourlyStats"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "StatsDailyResult": {
+      "type": "object",
+      "required": ["daily"],
+      "properties": {
+        "daily": {
+          "type": "array",
+          "items": {
+            "$ref": "types.json#/definitions/DailyStats"
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

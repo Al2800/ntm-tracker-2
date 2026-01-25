@@ -1,0 +1,114 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ntracker.local/schema/methods/core.json",
+  "title": "Core RPC Methods",
+  "description": "Core daemon health and capability methods",
+  "definitions": {
+    "HealthGetParams": {
+      "type": "null",
+      "description": "No parameters required"
+    },
+    "HealthGetResult": {
+      "type": "object",
+      "required": ["status", "uptime", "version", "instanceId", "runId", "schemaVersion", "protocolVersion", "capabilities", "lastEventId"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["healthy", "degraded", "unhealthy"]
+        },
+        "uptime": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Uptime in seconds"
+        },
+        "version": {
+          "type": "string",
+          "description": "Daemon version"
+        },
+        "instanceId": {
+          "type": "string",
+          "description": "UUID for this daemon instance"
+        },
+        "runId": {
+          "type": "string",
+          "description": "UUID for this daemon run"
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "protocolVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "capabilities": {
+          "$ref": "types.json#/definitions/Capabilities"
+        },
+        "lastEventId": {
+          "type": "integer",
+          "description": "Last event ID for cursor sync"
+        },
+        "lastError": {
+          "type": "string",
+          "description": "Last error message if any"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CapabilitiesGetParams": {
+      "type": "null"
+    },
+    "CapabilitiesGetResult": {
+      "type": "object",
+      "required": ["protocolVersion", "schemaVersion", "capabilities"],
+      "properties": {
+        "protocolVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "capabilities": {
+          "$ref": "types.json#/definitions/Capabilities"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SnapshotGetParams": {
+      "type": "null"
+    },
+    "SnapshotGetResult": {
+      "type": "object",
+      "required": ["sessions", "panes", "events", "stats", "lastEventId"],
+      "properties": {
+        "sessions": {
+          "type": "array",
+          "items": {
+            "$ref": "types.json#/definitions/Session"
+          }
+        },
+        "panes": {
+          "type": "array",
+          "items": {
+            "$ref": "types.json#/definitions/Pane"
+          }
+        },
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "types.json#/definitions/Event"
+          }
+        },
+        "stats": {
+          "$ref": "types.json#/definitions/StatsSummary"
+        },
+        "lastEventId": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

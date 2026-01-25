@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ntracker.local/schema/methods/admin.json",
+  "title": "Admin RPC Methods",
+  "description": "Administrative configuration and management methods (require admin token)",
+  "definitions": {
+    "ConfigGetParams": {
+      "type": "null"
+    },
+    "ConfigGetResult": {
+      "type": "object",
+      "required": ["config", "adminMode"],
+      "properties": {
+        "config": {
+          "type": "object",
+          "description": "Current daemon configuration"
+        },
+        "configPath": {
+          "type": "string",
+          "description": "Path to configuration file"
+        },
+        "adminMode": {
+          "type": "boolean",
+          "description": "Whether admin mode is active"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ConfigSetParams": {
+      "type": "object",
+      "description": "Configuration values to set",
+      "additionalProperties": true
+    },
+    "ConfigSetResult": {
+      "type": "object",
+      "required": ["applied", "config"],
+      "properties": {
+        "applied": {
+          "type": "boolean",
+          "const": true
+        },
+        "config": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ConfigReloadParams": {
+      "type": "null"
+    },
+    "ConfigReloadResult": {
+      "type": "object",
+      "required": ["reloaded", "config"],
+      "properties": {
+        "reloaded": {
+          "type": "boolean",
+          "const": true
+        },
+        "config": {
+          "type": "object"
+        },
+        "configPath": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DetectorsListParams": {
+      "type": "null"
+    },
+    "DetectorsListResult": {
+      "type": "object",
+      "required": ["detectors"],
+      "properties": {
+        "detectors": {
+          "type": "array",
+          "items": {
+            "$ref": "types.json#/definitions/DetectorInfo"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "DetectorsReloadParams": {
+      "type": "null"
+    },
+    "DetectorsReloadResult": {
+      "type": "object",
+      "required": ["reloaded"],
+      "properties": {
+        "reloaded": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ntracker.local/schema/methods/panes.json",
+  "title": "Pane RPC Methods",
+  "description": "Pane query and preview methods",
+  "definitions": {
+    "PanesGetParams": {
+      "type": "object",
+      "required": ["paneId"],
+      "properties": {
+        "paneId": {
+          "type": "string",
+          "description": "Pane ID to retrieve"
+        }
+      },
+      "additionalProperties": false
+    },
+    "PanesGetResult": {
+      "type": "object",
+      "required": ["pane"],
+      "properties": {
+        "pane": {
+          "$ref": "types.json#/definitions/Pane"
+        }
+      },
+      "additionalProperties": false
+    },
+    "PanesOutputPreviewParams": {
+      "type": "object",
+      "required": ["paneId"],
+      "properties": {
+        "paneId": {
+          "type": "string",
+          "description": "Pane ID to capture output from"
+        },
+        "maxLines": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 200,
+          "description": "Maximum lines to capture"
+        },
+        "maxChars": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 65536,
+          "description": "Maximum characters to return"
+        }
+      },
+      "additionalProperties": false
+    },
+    "PanesOutputPreviewResult": {
+      "type": "object",
+      "required": ["paneId", "content", "lines", "bytes", "truncated", "capturedAt", "redacted"],
+      "properties": {
+        "paneId": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string",
+          "description": "Captured pane content (redacted)"
+        },
+        "lines": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of lines captured"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Original byte count before truncation"
+        },
+        "truncated": {
+          "type": "boolean",
+          "description": "Whether output was truncated"
+        },
+        "capturedAt": {
+          "$ref": "types.json#/definitions/Timestamp"
+        },
+        "redacted": {
+          "type": "boolean",
+          "description": "Whether sensitive data was redacted"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

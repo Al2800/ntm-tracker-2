@@ -8,10 +8,14 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "generate:types": "npx ts-node scripts/generate-types.ts",
+    "prebuild": "npm run generate:types"
   },
   "devDependencies": {
     "@sveltejs/adapter-auto": "^3.0.0",
+    "json-schema-to-typescript": "^15.0.0",
+    "ts-node": "^10.9.2",
     "@sveltejs/kit": "^2.8.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
     "@tauri-apps/cli": "^2.0.0",

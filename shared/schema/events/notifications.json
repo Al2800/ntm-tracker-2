@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ntracker.local/schema/events/notifications.json",
+  "title": "Event Notifications",
+  "description": "Push notification payloads from daemon to app",
+  "definitions": {
+    "NotificationBase": {
+      "type": "object",
+      "required": ["channel", "type", "timestamp"],
+      "properties": {
+        "channel": {
+          "type": "string",
+          "enum": ["sessions", "panes", "events", "stats"]
+        },
+        "type": {
+          "type": "string"
+        },
+        "timestamp": {
+          "$ref": "../types.json#/definitions/Timestamp"
+        }
+      }
+    },
+    "SessionNotification": {
+      "allOf": [
+        { "$ref": "#/definitions/NotificationBase" },
+        {
+          "type": "object",
+          "required": ["session"],
+          "properties": {
+            "channel": {
+              "const": "sessions"
+            },
+            "type": {
+              "enum": ["created", "updated", "ended"]
+            },
+            "session": {
+              "$ref": "../types.json#/definitions/Session"
+            }
+          }
+        }
+      ]
+    },
+    "PaneNotification": {
+      "allOf": [
+        { "$ref": "#/definitions/NotificationBase" },
+        {
+          "type": "object",
+          "required": ["pane"],
+          "properties": {
+            "channel": {
+              "const": "panes"
+            },
+            "type": {
+              "enum": ["created", "updated", "ended", "status_changed"]
+            },
+            "pane": {
+              "$ref": "../types.json#/definitions/Pane"
+            }
+          }
+        }
+      ]
+    },
+    "EventNotification": {
+      "allOf": [
+        { "$ref": "#/definitions/NotificationBase" },
+        {
+          "type": "object",
+          "required": ["event"],
+          "properties": {
+            "channel": {
+              "const": "events"
+            },
+            "type": {
+              "enum": ["compact", "escalation", "status_change"]
+            },
+            "event": {
+              "$ref": "../types.json#/definitions/Event"
+            }
+          }
+        }
+      ]
+    },
+    "StatsNotification": {
+      "allOf": [
+        { "$ref": "#/definitions/NotificationBase" },
+        {
+          "type": "object",
+          "required": ["summary"],
+          "properties": {
+            "channel": {
+              "const": "stats"
+            },
+            "type": {
+              "enum": ["summary_updated", "hourly_updated"]
+            },
+            "summary": {
+              "$ref": "../types.json#/definitions/StatsSummary"
+            }
+          }
+        }
+      ]
+    },
+    "Notification": {
+      "oneOf": [
+        { "$ref": "#/definitions/SessionNotification" },
+        { "$ref": "#/definitions/PaneNotification" },
+        { "$ref": "#/definitions/EventNotification" },
+        { "$ref": "#/definitions/StatsNotification" }
+      ]
+    }
+  }
+}

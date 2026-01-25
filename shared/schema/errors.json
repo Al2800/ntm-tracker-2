@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ntracker.local/schema/errors.json",
+  "title": "NTM Tracker RPC Error Codes",
+  "description": "Application-level error codes for NTM Tracker RPC",
+  "definitions": {
+    "RpcError": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "$ref": "#/definitions/ErrorCode"
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable error message"
+        },
+        "data": {
+          "description": "Additional error context"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ErrorCode": {
+      "type": "string",
+      "enum": [
+        "UNAUTHORIZED",
+        "FORBIDDEN",
+        "RATE_LIMITED",
+        "STALE_CURSOR",
+        "UNSUPPORTED",
+        "DEGRADED",
+        "NOT_FOUND",
+        "INVALID_PARAMS"
+      ],
+      "description": "Application error codes"
+    },
+    "ErrorCodeDescriptions": {
+      "type": "object",
+      "description": "Error code documentation (not for validation)",
+      "properties": {
+        "UNAUTHORIZED": {
+          "const": "Authentication required but not provided"
+        },
+        "FORBIDDEN": {
+          "const": "Admin token required for this method"
+        },
+        "RATE_LIMITED": {
+          "const": "Too many requests, retry after delay"
+        },
+        "STALE_CURSOR": {
+          "const": "Event cursor is no longer valid"
+        },
+        "UNSUPPORTED": {
+          "const": "Method or feature not supported"
+        },
+        "DEGRADED": {
+          "const": "Service is degraded, result may be incomplete"
+        },
+        "NOT_FOUND": {
+          "const": "Requested resource not found"
+        },
+        "INVALID_PARAMS": {
+          "const": "Invalid or missing parameters"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ntracker.local/schema/methods/sessions.json",
+  "title": "Session RPC Methods",
+  "description": "Session query and management methods",
+  "definitions": {
+    "SessionsListParams": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "types.json#/definitions/SessionStatus",
+          "description": "Filter by session status"
+        },
+        "sessionIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Filter by specific session IDs"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SessionsListResult": {
+      "type": "object",
+      "required": ["sessions"],
+      "properties": {
+        "sessions": {
+          "type": "array",
+          "items": {
+            "$ref": "types.json#/definitions/Session"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SessionsGetParams": {
+      "type": "object",
+      "required": ["sessionId"],
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Session ID to retrieve"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SessionsGetResult": {
+      "type": "object",
+      "required": ["session"],
+      "properties": {
+        "session": {
+          "$ref": "types.json#/definitions/Session"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

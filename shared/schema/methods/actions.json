@@ -1,0 +1,82 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ntracker.local/schema/methods/actions.json",
+  "title": "Action RPC Methods",
+  "description": "Session and pane action methods",
+  "definitions": {
+    "SessionKillParams": {
+      "type": "object",
+      "required": ["sessionId"],
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Session ID to kill"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SessionKillResult": {
+      "type": "object",
+      "required": ["killed", "sessionId"],
+      "properties": {
+        "killed": {
+          "type": "boolean"
+        },
+        "sessionId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "PaneSendParams": {
+      "type": "object",
+      "required": ["paneId", "payload"],
+      "properties": {
+        "paneId": {
+          "type": "string",
+          "description": "Pane ID to send to"
+        },
+        "payload": {
+          "type": "string",
+          "description": "Text payload to send"
+        }
+      },
+      "additionalProperties": false
+    },
+    "PaneSendResult": {
+      "type": "object",
+      "required": ["sent", "paneId"],
+      "properties": {
+        "sent": {
+          "type": "boolean"
+        },
+        "paneId": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AttachCommandParams": {
+      "type": "object",
+      "required": ["paneId"],
+      "properties": {
+        "paneId": {
+          "type": "string",
+          "description": "Pane ID to attach to"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AttachCommandResult": {
+      "type": "object",
+      "required": ["command"],
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "tmux attach command string"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

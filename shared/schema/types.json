@@ -1,0 +1,309 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ntracker.local/schema/types.json",
+  "title": "NTM Tracker Data Types",
+  "description": "Shared data type definitions for NTM Tracker",
+  "definitions": {
+    "SessionStatus": {
+      "type": "string",
+      "enum": ["active", "idle", "ended", "unknown"],
+      "description": "Session lifecycle status"
+    },
+    "PaneStatus": {
+      "type": "string",
+      "enum": ["active", "idle", "waiting", "ended", "unknown"],
+      "description": "Pane activity status"
+    },
+    "EventType": {
+      "type": "string",
+      "enum": ["compact", "escalation", "pane.status", "session.status"],
+      "description": "Event type discriminator"
+    },
+    "EventSeverity": {
+      "type": "string",
+      "enum": ["info", "warn", "error"],
+      "description": "Event severity level"
+    },
+    "EventStatus": {
+      "type": "string",
+      "enum": ["pending", "resolved", "dismissed"],
+      "description": "Event resolution status"
+    },
+    "Timestamp": {
+      "type": "integer",
+      "description": "Unix timestamp in seconds",
+      "minimum": 0
+    },
+    "Session": {
+      "type": "object",
+      "required": ["sessionId", "name", "status", "paneCount", "createdAt", "lastSeenAt", "sourceId"],
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Unique session identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable session name"
+        },
+        "status": {
+          "$ref": "#/definitions/SessionStatus"
+        },
+        "statusReason": {
+          "type": "string",
+          "description": "Reason for current status"
+        },
+        "paneCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of panes in session"
+        },
+        "createdAt": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "lastSeenAt": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "endedAt": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "tmuxSessionId": {
+          "type": "string",
+          "description": "Underlying tmux session ID"
+        },
+        "sourceId": {
+          "type": "string",
+          "description": "Data source identifier"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Additional session metadata"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Pane": {
+      "type": "object",
+      "required": ["paneId", "sessionId", "status", "paneIndex", "createdAt", "lastSeenAt"],
+      "properties": {
+        "paneId": {
+          "type": "string",
+          "description": "Unique pane identifier"
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Parent session identifier"
+        },
+        "status": {
+          "$ref": "#/definitions/PaneStatus"
+        },
+        "statusReason": {
+          "type": "string",
+          "description": "Reason for current status"
+        },
+        "paneIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Pane index within session"
+        },
+        "agentType": {
+          "type": "string",
+          "description": "Detected agent type (claude-code, codex, etc.)"
+        },
+        "createdAt": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "lastSeenAt": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "lastActivityAt": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "currentCommand": {
+          "type": "string",
+          "description": "Currently running command"
+        },
+        "endedAt": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "tmuxPaneId": {
+          "type": "string"
+        },
+        "tmuxWindowId": {
+          "type": "string"
+        },
+        "tmuxPanePid": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Event": {
+      "type": "object",
+      "required": ["id", "eventType", "sessionId", "paneId", "detectedAt"],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "description": "Monotonic event ID"
+        },
+        "eventType": {
+          "$ref": "#/definitions/EventType"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "paneId": {
+          "type": "string"
+        },
+        "detectedAt": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "severity": {
+          "$ref": "#/definitions/EventSeverity"
+        },
+        "status": {
+          "$ref": "#/definitions/EventStatus"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Escalation": {
+      "type": "object",
+      "required": ["id", "sessionId", "paneId", "detectedAt"],
+      "properties": {
+        "id": {
+          "type": "integer"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "paneId": {
+          "type": "string"
+        },
+        "detectedAt": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "status": {
+          "$ref": "#/definitions/EventStatus"
+        }
+      },
+      "additionalProperties": false
+    },
+    "StatsSummary": {
+      "type": "object",
+      "required": ["sessions", "panes", "totalCompacts", "activeMinutes", "estimatedTokens"],
+      "properties": {
+        "sessions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "panes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "totalCompacts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "activeMinutes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "estimatedTokens": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "HourlyStats": {
+      "type": "object",
+      "required": ["hourStart", "sessionId", "totalCompacts", "activeMinutes", "estimatedTokens"],
+      "properties": {
+        "hourStart": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "totalCompacts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "activeMinutes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "estimatedTokens": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "DailyStats": {
+      "type": "object",
+      "required": ["dayStart", "sessionId", "totalCompacts", "activeMinutes", "estimatedTokens"],
+      "properties": {
+        "dayStart": {
+          "$ref": "#/definitions/Timestamp"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "totalCompacts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "activeMinutes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "estimatedTokens": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "Capabilities": {
+      "type": "object",
+      "required": ["ntm", "tmux", "stream", "systemd"],
+      "properties": {
+        "ntm": {
+          "type": "boolean",
+          "description": "NTM integration available"
+        },
+        "tmux": {
+          "type": "boolean",
+          "description": "tmux integration available"
+        },
+        "stream": {
+          "type": "boolean",
+          "description": "Event streaming available"
+        },
+        "systemd": {
+          "type": "boolean",
+          "description": "Running as systemd service"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DetectorInfo": {
+      "type": "object",
+      "required": ["name", "version", "enabled"],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
