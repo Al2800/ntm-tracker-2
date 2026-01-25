@@ -282,4 +282,96 @@
   .tray-item {
     @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-border-focus focus-visible:ring-inset;
   }
+
+  /*
+   * ──────────────────────────────────────────────────────────────────────────
+   * MOTION & MICRO-INTERACTIONS
+   * Subtle animations that make the UI feel premium
+   * ──────────────────────────────────────────────────────────────────────────
+   */
+
+  /* Card hover lift effect */
+  .card-lift {
+    @apply transition-all duration-200 ease-out;
+  }
+  .card-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3), 0 0 8px rgba(56, 189, 248, 0.1);
+  }
+
+  /* Subtle press effect */
+  .press-effect:active {
+    transform: scale(0.98);
+  }
+
+  /* Button hover glow */
+  .btn-glow:hover {
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+  }
+
+  /* Interactive card with all effects */
+  .card-interactive {
+    @apply transition-all duration-200 ease-out;
+  }
+  .card-interactive:hover {
+    @apply border-border-strong shadow-elevation-1;
+    transform: translateY(-1px);
+  }
+  .card-interactive:active {
+    transform: translateY(0);
+  }
+
+  /* Status dot pulse for active items */
+  .status-dot-pulse {
+    animation: statusPulse 2s ease-in-out infinite;
+  }
+
+  @keyframes statusPulse {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.7;
+      transform: scale(1.1);
+    }
+  }
+
+  /* Fade transitions for modals/popovers */
+  .transition-fade {
+    @apply transition-opacity duration-200 ease-out;
+  }
+
+  /* Scale transitions for tooltips/dropdowns */
+  .transition-scale {
+    @apply transition-transform duration-150 ease-out;
+  }
+
+  /*
+   * ──────────────────────────────────────────────────────────────────────────
+   * REDUCED MOTION
+   * Respect user preference for reduced motion
+   * ──────────────────────────────────────────────────────────────────────────
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+
+    .card-lift:hover,
+    .card-interactive:hover,
+    .press-effect:active,
+    .card-interactive:active {
+      transform: none !important;
+    }
+
+    .status-dot-pulse {
+      animation: none !important;
+    }
+  }
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { getAttachCommand, rpcCallWithRetry } from '$lib/tauri';
+  import EmptyState from './states/EmptyState.svelte';
 
   export let paneId: string | null = null;
 
@@ -288,11 +289,14 @@
       <span>pane: {preview.paneId}</span>
     </div>
 
-    <div class="mt-3 max-h-80 overflow-auto rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+    <div class="mt-3 max-h-80 overflow-auto rounded-lg border border-border bg-surface-base p-3">
       {#if !hasContent}
-        <p class="text-sm text-slate-300/80">
-          No output returned. Output capture may be disabled or the pane is empty.
-        </p>
+        <EmptyState
+          icon="output"
+          title="No output available"
+          description="Output capture may be disabled or the pane is empty."
+          compact
+        />
       {:else}
         <pre class="whitespace-pre-wrap font-mono text-xs leading-relaxed text-slate-100"
           >{@html ansiHtml}</pre
