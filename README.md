@@ -2,9 +2,9 @@
 
 **NTM Tracker** is a Windows system tray app that monitors NTM (Named Tmux Manager) sessions running in WSL2. It provides real‑time session/pane status, compact events, escalations, and usage analytics.
 
-> **Project status**: Early stage. This repository currently contains specs, fixtures, and spikes. Documentation below reflects the **intended** behavior described in `PLAN.md`.
+> **Project status**: Active development. Installer builds are in progress; some flows below describe the intended release experience.
 
-## Features (Planned)
+## Features
 
 - **Session & Pane Tracking** — live status (active/idle/waiting)
 - **Compact Detection** — pattern matching + context‑size drops
@@ -13,7 +13,7 @@
 - **System Tray Workflow** — quick status + per‑session actions
 - **Dashboard UI** — overview cards, activity graph, escalation list
 
-## Architecture (Planned)
+## Architecture
 
 ```
 Presentation  → Svelte UI (Dashboard + Tray)
@@ -40,14 +40,45 @@ Default transport is **stdio JSON‑RPC via `wsl.exe`**, with optional WebSocket
 - Windows 10/11 with WSL2
 - A WSL distro (Ubuntu recommended)
 - `tmux` installed in WSL
-- `ntm` installed in WSL (Named Tmux Manager)
+- `ntm` installed in WSL (Named Tmux Manager, optional but recommended)
+- Node.js 20+ and Rust (for local builds)
 
-## Quick Start (Planned Flow)
+## Installation
+
+### Prebuilt (MSI)
+
+1. Download the latest MSI from GitHub Releases (when published).
+2. Run the installer and follow the first‑run wizard.
+3. Launch the app; it will bootstrap the daemon in WSL.
+
+### Build from source (Windows)
+
+1. Install prerequisites: Node.js 20+, Rust stable, and Tauri build deps.
+2. Install frontend deps:
+   ```bash
+   npm -C app install
+   ```
+3. Build the MSI:
+   ```powershell
+   ./scripts/build.ps1
+   ```
+4. Install the generated MSI from `app/src-tauri/target/release/bundle/msi/`.
+
+## Quick Start
 
 1. Install WSL2 + your distro.
-2. Install `tmux` + `ntm` in WSL.
+2. Install `tmux` + `ntm` inside WSL.
 3. Launch the Windows app (first run installs the daemon in WSL).
 4. Confirm the tray icon shows live session status.
+5. Open the dashboard to view sessions and activity.
+
+## Configuration
+
+See `docs/configuration.md` for daemon and app settings (poll intervals, notifications, quiet hours, and transport selection).
+
+## Troubleshooting
+
+See `docs/troubleshooting.md` for WSL connectivity tips, stdio fallback, and diagnostics guidance.
 
 ## Docs
 
