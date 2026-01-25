@@ -36,6 +36,8 @@
     ...series.map((entry) => entry.activeMinutes),
     ...series.map((entry) => entry.totalCompacts)
   );
+  $: totalActive = series.reduce((sum, e) => sum + e.activeMinutes, 0);
+  $: totalCompacts = series.reduce((sum, e) => sum + e.totalCompacts, 0);
 
   const labelFor = (bucket: number) =>
     new Date(bucket).toLocaleTimeString([], { hour: '2-digit' });
@@ -48,51 +50,57 @@
   };
 </script>
 
-<div class="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5">
+<div class="card">
   <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div>
-      <h3 class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">
-        Activity (24h)
-      </h3>
-      <p class="mt-1 text-xs text-slate-500">Active minutes + compacts per hour</p>
+      <h3 class="label">Activity (24h)</h3>
+      <p class="mt-1 text-xs text-text-subtle">Active minutes + compacts per hour</p>
     </div>
     {#if showLegend}
-      <div class="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+      <div class="flex flex-wrap items-center gap-2">
         <button
-          class={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${
-            showActive ? 'border-emerald-400/60 text-emerald-200' : 'border-slate-700 text-slate-500'
-          }`}
+          class={`chip ${showActive ? 'chip-success' : 'chip-inactive'}`}
           on:click={() => (showActive = !showActive)}
           type="button"
         >
-          <span class="h-2 w-2 rounded-full bg-emerald-400/70"></span>
+          <span class="status-dot status-dot-success"></span>
           Active
         </button>
         <button
-          class={`flex items-center gap-2 rounded-full border px-3 py-1 transition ${
-            showCompacts ? 'border-amber-400/60 text-amber-200' : 'border-slate-700 text-slate-500'
-          }`}
+          class={`chip ${showCompacts ? 'chip-warning' : 'chip-inactive'}`}
           on:click={() => (showCompacts = !showCompacts)}
           type="button"
         >
-          <span class="h-2 w-2 rounded-full bg-amber-400/70"></span>
+          <span class="status-dot status-dot-warning"></span>
           Compacts
         </button>
       </div>
     {/if}
   </div>
 
+  <!-- Summary stats -->
+  <div class="mb-4 grid grid-cols-2 gap-3">
+    <div class="rounded-lg border border-border bg-surface-base px-3 py-2 text-center">
+      <p class="text-lg font-bold text-status-success">{totalActive}</p>
+      <p class="label-sm">Active mins</p>
+    </div>
+    <div class="rounded-lg border border-border bg-surface-base px-3 py-2 text-center">
+      <p class="text-lg font-bold text-status-warning">{totalCompacts}</p>
+      <p class="label-sm">Compacts</p>
+    </div>
+  </div>
+
   <div
-    class="relative grid items-end gap-1 rounded-xl border border-slate-800/60 bg-slate-950/60 px-2 py-3"
+    class="relative grid items-end gap-1 rounded-xl border border-border bg-surface-base px-2 py-3"
     style="grid-template-columns: repeat(24, minmax(0, 1fr));"
   >
     {#each series as entry (entry.bucket)}
       <div class="flex flex-col items-center gap-2">
-        <div class="flex items-end gap-1">
+        <div class="flex items-end gap-0.5">
           {#if showActive}
             <div
-              class={`w-2 rounded-full bg-emerald-400/70 ${
-                isNowBucket(entry.bucket) ? 'shadow-[0_0_12px_rgba(52,211,153,0.45)]' : ''
+              class={`w-1.5 rounded-full bg-status-success ${
+                isNowBucket(entry.bucket) ? 'shadow-glow-success' : ''
               }`}
               style={`height: ${barHeight(entry.activeMinutes)}px`}
               title={`Active: ${entry.activeMinutes}m | Compacts: ${entry.totalCompacts}`}
@@ -100,15 +108,15 @@
           {/if}
           {#if showCompacts}
             <div
-              class={`w-2 rounded-full bg-amber-400/70 ${
-                isNowBucket(entry.bucket) ? 'shadow-[0_0_12px_rgba(251,191,36,0.45)]' : ''
+              class={`w-1.5 rounded-full bg-status-warning ${
+                isNowBucket(entry.bucket) ? 'shadow-glow-warning' : ''
               }`}
               style={`height: ${barHeight(entry.totalCompacts)}px`}
               title={`Active: ${entry.activeMinutes}m | Compacts: ${entry.totalCompacts}`}
             ></div>
           {/if}
         </div>
-        <span class="text-[10px] text-slate-500">{labelFor(entry.bucket)}</span>
+        <span class="text-[9px] text-text-muted">{labelFor(entry.bucket)}</span>
       </div>
     {/each}
   </div>
