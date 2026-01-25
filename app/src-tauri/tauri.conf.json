@@ -25,7 +25,12 @@
   },
   "bundle": {
     "active": true,
-    "targets": "msi"
+    "targets": ["msi"],
+    "windows": {
+      "wix": {
+        "license": "LICENSE.rtf"
+      }
+    }
   },
   "plugins": {
     "shell": {},
