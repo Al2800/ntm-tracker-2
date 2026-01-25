@@ -178,18 +178,18 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
             let id = event.id().as_ref();
             if let Some(session_id) = id.strip_prefix(MENU_SESSION_PREFIX) {
                 show_main_window(app);
-                let _ = app.emit_all("tray:open-session", session_id.to_string());
+                let _ = app.emit("tray:open-session", session_id.to_string());
                 return;
             }
 
             match id {
                 MENU_OPEN_DASHBOARD => show_main_window(app),
                 MENU_SNOOZE_NOTIFICATIONS => {
-                    let _ = app.emit_all("tray:snooze", ());
+                    let _ = app.emit("tray:snooze", ());
                 }
                 MENU_SETTINGS => {
                     show_main_window(app);
-                    let _ = app.emit_all("tray:open-settings", ());
+                    let _ = app.emit("tray:open-settings", ());
                 }
                 MENU_QUIT => {
                     bootstrap::shutdown(app);
