@@ -41,6 +41,25 @@ CPU (1Hz polling for 300s):
 - cpu_seconds (user+sys): 1.67s
 - cpu_pct_one_core: 0.56%
 
+## Command Latency (this dev container)
+
+Captured with `bash benchmarks/command_latency.sh` (`RUNS=100`, `CPU_LOAD=0`).
+
+- tmux list-panes:
+  - p95: 10.70ms
+  - p99: 11.13ms
+  - max: 15.50ms
+- ntm:
+  - `ntm version`: 1.2.0
+  - `ntm --robot-markdown --md-compact --md-sections sessions`:
+    - p95: 43.30ms
+    - p99: 55.59ms
+    - max: 1356.18ms (outlier)
+  - `ntm --robot-tail --lines 50 --json`:
+    - p95: 53.62ms
+    - p99: 60.07ms
+    - max: 60.33ms
+
 ## Recommendation
 
 - `tmux list-panes -a -F ...` is comfortably within the latency budget (p99 well under 200ms).
