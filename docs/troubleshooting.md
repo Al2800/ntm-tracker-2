@@ -102,6 +102,12 @@ WSL localhost forwarding can be unreliable on some machines. If you must use WS/
 - Bind to `127.0.0.1:3847` only.
 - Avoid VPNs while testing.
 - Restart WSL after resume/sleep.
+- If connections hang after sleep/VPN changes, run `wsl.exe --shutdown` and relaunch.
+- Verify the port is reachable from Windows:
+  ```powershell
+  Test-NetConnection -ComputerName 127.0.0.1 -Port 3847
+  ```
+- If TCP fails repeatedly, switch transport back to **stdio** (default) in settings.
 
 ## Still Stuck?
 
