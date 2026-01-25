@@ -1,0 +1,175 @@
+# NTM Tracker Default Detector Pack
+# This file defines patterns for detecting compaction and escalation events.
+# Custom patterns can override these by placing a file at:
+#   ~/.config/ntm-tracker/detectors.toml
+
+[pack]
+version = "1.0.0"
+min_daemon_version = "0.1.0"
+description = "Default detection patterns for Claude Code and similar AI agents"
+
+# Compact Detection Patterns
+# These detect when an AI agent's context has been compacted/truncated.
+# confidence: 0.0-1.0 (1.0 = definite compact, <0.5 = warning only)
+# category: "hard" (definite compact) or "warning" (approaching limit)
+
+[[compact_patterns]]
+pattern = "auto-compacting conversation"
+flags = "i"  # case-insensitive
+confidence = 1.0
+category = "hard"
+reason = "auto_compacting"
+source = "claude-code"
+
+[[compact_patterns]]
+pattern = "conversation compacted"
+flags = "i"
+confidence = 1.0
+category = "hard"
+reason = "conversation_compacted"
+source = "claude-code"
+
+[[compact_patterns]]
+pattern = "context limit reached"
+flags = "i"
+confidence = 1.0
+category = "hard"
+reason = "context_limit"
+source = "claude-code"
+
+[[compact_patterns]]
+pattern = "starting fresh context"
+flags = "i"
+confidence = 1.0
+category = "hard"
+reason = "fresh_context"
+source = "claude-code"
+
+[[compact_patterns]]
+pattern = "context.*reset"
+flags = "i"
+confidence = 1.0
+category = "hard"
+reason = "context_reset"
+source = "claude-code"
+
+[[compact_patterns]]
+pattern = "compacting"
+flags = "i"
+confidence = 0.9
+category = "hard"
+reason = "compacting"
+source = "generic"
+# Note: Will be filtered out if "approaching" or "soon" is in the same line
+
+[[compact_patterns]]
+pattern = "approaching context limit"
+flags = "i"
+confidence = 0.4
+category = "warning"
+reason = "approaching_limit"
+source = "claude-code"
+
+[[compact_patterns]]
+pattern = "context.*(near|close).*limit"
+flags = "i"
+confidence = 0.4
+category = "warning"
+reason = "context_near_limit"
+source = "generic"
+
+# Escalation Patterns
+# These detect when an AI agent needs human intervention.
+# severity: "error" (critical) or "warn" (attention needed)
+# requires_prompt: if true, line must look like a prompt (ends with > or $, or contains (y/n))
+
+[[escalation_patterns]]
+pattern = "fatal error"
+flags = "i"
+severity = "error"
+confidence = 0.9
+requires_prompt = false
+source = "generic"
+
+[[escalation_patterns]]
+pattern = "cannot proceed"
+flags = "i"
+severity = "error"
+confidence = 0.9
+requires_prompt = false
+source = "generic"
+
+[[escalation_patterns]]
+pattern = "permission denied.*continue"
+flags = "i"
+severity = "error"
+confidence = 0.85
+requires_prompt = false
+source = "generic"
+
+[[escalation_patterns]]
+pattern = "need.*human.*input"
+flags = "i"
+severity = "warn"
+confidence = 0.75
+requires_prompt = false
+source = "claude-code"
+
+[[escalation_patterns]]
+pattern = "escalating to user"
+flags = "i"
+severity = "warn"
+confidence = 0.7
+requires_prompt = false
+source = "claude-code"
+
+[[escalation_patterns]]
+pattern = "requires manual intervention"
+flags = "i"
+severity = "warn"
+confidence = 0.7
+requires_prompt = false
+source = "generic"
+
+[[escalation_patterns]]
+pattern = "please confirm.*(delete|remove|overwrite|proceed|continue)"
+flags = "i"
+severity = "warn"
+confidence = 0.8
+requires_prompt = true
+source = "generic"
+
+[[escalation_patterns]]
+pattern = "waiting for user"
+flags = "i"
+severity = "warn"
+confidence = 0.65
+requires_prompt = false
+source = "generic"
+
+[[escalation_patterns]]
+pattern = "blocked.*approval"
+flags = "i"
+severity = "warn"
+confidence = 0.7
+requires_prompt = false
+source = "generic"
+
+# Prompt patterns (used to detect if a line looks like a prompt)
+[[prompt_patterns]]
+pattern = "\\s*>\\s*$"
+description = "Ends with >"
+
+[[prompt_patterns]]
+pattern = "\\s*\\$\\s*$"
+description = "Ends with $"
+
+[[prompt_patterns]]
+pattern = "\\(y/n\\)"
+flags = "i"
+description = "Contains (y/n)"
+
+[[prompt_patterns]]
+pattern = "press enter"
+flags = "i"
+description = "Contains 'press enter'"

@@ -1,0 +1,20 @@
+[Unit]
+Description=NTM Tracker Daemon - Monitor tmux sessions in WSL2
+Documentation=https://github.com/user/ntracker3
+
+[Service]
+Type=simple
+ExecStart=%h/.cargo/bin/ntm-tracker-daemon --ws-port 9847
+Restart=on-failure
+RestartSec=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ntm-tracker
+
+# Environment
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=default.target

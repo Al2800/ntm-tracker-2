@@ -142,6 +142,10 @@ pub fn handle(method: &str, params: Value, ctx: &RpcContext) -> RpcResult<Value>
         "actions.sessionKill" => handlers::actions::session_kill(ctx, params),
         "actions.paneSend" => handlers::actions::pane_send(ctx, params),
         "attach.command" => handlers::actions::attach_command(ctx, params),
+        "debug.diagnostics" => handlers::debug::diagnostics(ctx),
+        "debug.selfTest" => handlers::debug::self_test(ctx),
+        "debug.metrics" => handlers::debug::metrics(ctx),
+        "debug.logTail" => handlers::debug::log_tail(ctx),
         _ => Err(RpcError::new(
             CODE_UNSUPPORTED,
             format!("Unsupported method: {method}"),

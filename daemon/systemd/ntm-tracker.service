@@ -1,0 +1,29 @@
+[Unit]
+Description=NTM Tracker Daemon - Monitor tmux sessions in WSL2
+Documentation=https://github.com/user/ntracker3
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ntm-tracker-daemon --ws-port 9847
+Restart=on-failure
+RestartSec=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ntm-tracker
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+ReadWritePaths=/home/%u/.local/share/ntm-tracker
+
+# Resource limits
+MemoryMax=256M
+TasksMax=100
+
+[Install]
+WantedBy=default.target
