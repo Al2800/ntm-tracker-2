@@ -2,10 +2,22 @@ use crate::cache::Cache;
 use crate::models::pane::Pane;
 use crate::command::{CommandCategory, CommandConfig, CommandRunner, CommandSpec, CommandError};
 use crate::redaction::default_redactor;
-use crate::rpc::{parse_params, RpcContext, RpcError, RpcResult, CODE_DEGRADED, CODE_NOT_FOUND};
+use crate::rpc::{parse_params, RpcContext, RpcError, RpcResult, CODE_DEGRADED, CODE_INVALID_PARAMS, CODE_NOT_FOUND};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+/// Validates that a pane_id is safe for use with tmux commands.
+/// Valid tmux pane targets: %<digits>, @<digits>:<digits>, session:window.pane
+/// Only allows alphanumeric, %, @, :, ., -, _
+fn is_valid_pane_id(pane_id: &str) -> bool {
+    if pane_id.is_empty() || pane_id.len() > 64 {
+        return false;
+    }
+    pane_id
+        .chars()
+        .all(|c| c.is_alphanumeric() || matches!(c, '%' | '@' | ':' | '.' | '-' | '_'))
+}
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -80,6 +92,12 @@ pub fn get(ctx: &RpcContext, params: Value) -> RpcResult<Value> {
 
 pub fn output_preview(_ctx: &RpcContext, params: Value) -> RpcResult<Value> {
     let params: PanePreviewParams = parse_params(params)?;
+
+    // Validate pane_id to prevent command injection
+    if !is_valid_pane_id(&params.pane_id) {
+        return Err(RpcError::new(CODE_INVALID_PARAMS, "Invalid pane_id format"));
+    }
+
     let max_lines = params.max_lines.unwrap_or(200).max(1);
     let max_chars = params.max_chars.unwrap_or(64 * 1024).max(1);
     let command = CommandSpec {
@@ -140,4 +158,30 @@ pub fn output_preview(_ctx: &RpcContext, params: Value) -> RpcResult<Value> {
         "capturedAt": captured_at,
         "redacted": true
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn valid_pane_ids() {
+        assert!(is_valid_pane_id("%0"));
+        assert!(is_valid_pane_id("%123"));
+        assert!(is_valid_pane_id("@1:0"));
+        assert!(is_valid_pane_id("session:window.0"));
+        assert!(is_valid_pane_id("my-session:0.1"));
+        assert!(is_valid_pane_id("my_session:0"));
+    }
+
+    #[test]
+    fn invalid_pane_ids() {
+        assert!(!is_valid_pane_id(""));
+        assert!(!is_valid_pane_id("; rm -rf /"));
+        assert!(!is_valid_pane_id("$(whoami)"));
+        assert!(!is_valid_pane_id("`id`"));
+        assert!(!is_valid_pane_id("foo\nbar"));
+        assert!(!is_valid_pane_id("foo bar"));
+        assert!(!is_valid_pane_id(&"a".repeat(100)));
+    }
 }

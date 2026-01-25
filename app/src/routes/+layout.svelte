@@ -10,20 +10,29 @@
   import { initSettings, settings, settingsReady } from '$lib/stores/settings';
   import '../app.css';
 
-  let unlistenOpenSettings: UnlistenFn | null = null;
-  let unlistenOpenSession: UnlistenFn | null = null;
-  let unlistenOpenSearch: UnlistenFn | null = null;
-  let unsubscribeSettingsReady: (() => void) | null = null;
+  // Track all cleanup functions in an array to handle async listener setup
+  const cleanupFns: (() => void)[] = [];
+  let mounted = true;
+
+  const addCleanup = (fn: () => void) => {
+    if (mounted) {
+      cleanupFns.push(fn);
+    } else {
+      // If already unmounted, run cleanup immediately
+      fn();
+    }
+  };
 
   const cleanup = () => {
-    unlistenOpenSettings?.();
-    unlistenOpenSettings = null;
-    unlistenOpenSession?.();
-    unlistenOpenSession = null;
-    unlistenOpenSearch?.();
-    unlistenOpenSearch = null;
-    unsubscribeSettingsReady?.();
-    unsubscribeSettingsReady = null;
+    mounted = false;
+    for (const fn of cleanupFns) {
+      try {
+        fn();
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+    cleanupFns.length = 0;
     stopNotifications();
     stopConnectionLoop();
   };
@@ -33,7 +42,7 @@
     startConnectionLoop();
     initNotifications();
 
-    unsubscribeSettingsReady = settingsReady.subscribe((ready) => {
+    const unsubscribeSettingsReady = settingsReady.subscribe((ready) => {
       if (!ready) return;
       const current = get(settings);
       const path = get(page).url.pathname;
@@ -41,28 +50,23 @@
         void goto('/wizard');
       }
     });
+    addCleanup(unsubscribeSettingsReady);
 
+    // Set up event listeners with proper cleanup tracking
     void listen('tray:open-settings', () => {
       void goto('/settings');
-    }).then((unlisten) => {
-      unlistenOpenSettings = unlisten;
-    });
+    }).then((unlisten) => addCleanup(unlisten));
 
     void listen<string>('tray:open-session', (event) => {
       selectSession(event.payload);
       void goto('/');
-    }).then((unlisten) => {
-      unlistenOpenSession = unlisten;
-    });
+    }).then((unlisten) => addCleanup(unlisten));
 
     void listen('tray:open-search', () => {
       void goto('/?focusSearch=1');
-    }).then((unlisten) => {
-      unlistenOpenSearch = unlisten;
-    });
+    }).then((unlisten) => addCleanup(unlisten));
   });
 
-  // Use onDestroy for cleanup - more reliable than onMount return in Svelte
   onDestroy(cleanup);
 </script>
 

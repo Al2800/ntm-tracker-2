@@ -47,6 +47,7 @@ export const rpcCallWithRetry = async <T = unknown>(
     retryable = defaultRetryable
   } = options;
 
+  const maxDelayMs = 30000; // Cap at 30 seconds to prevent excessive waits
   let attempt = 0;
   while (true) {
     try {
@@ -55,7 +56,7 @@ export const rpcCallWithRetry = async <T = unknown>(
       if (!idempotent || attempt >= maxRetries || !retryable(error)) {
         throw error;
       }
-      const delay = baseDelayMs * backoffFactor ** attempt;
+      const delay = Math.min(baseDelayMs * backoffFactor ** attempt, maxDelayMs);
       attempt += 1;
       await sleep(delay);
     }

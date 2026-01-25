@@ -1,5 +1,9 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { isPermissionGranted, requestPermission } from '@tauri-apps/plugin-notification';
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification
+} from '@tauri-apps/plugin-notification';
 import { get } from 'svelte/store';
 import type { AppSettings, TrackerEvent } from '../types';
 import { events } from '../stores/events';
@@ -7,11 +11,30 @@ import { settings } from '../stores/settings';
 import { selectSession, sessions } from '../stores/sessions';
 
 const DEDUPE_WINDOW_MS = 5 * 60 * 1000;
+const MAX_DEDUPE_ENTRIES = 500;
 
 let snoozedUntil: number | null = null;
 let lastEventId: number | null = null;
 let recentSent: number[] = [];
 const lastByKey = new Map<string, number>();
+
+/** Prune old entries from lastByKey to prevent unbounded memory growth */
+const pruneLastByKey = () => {
+  const cutoff = Date.now() - DEDUPE_WINDOW_MS;
+  for (const [key, timestamp] of lastByKey) {
+    if (timestamp < cutoff) {
+      lastByKey.delete(key);
+    }
+  }
+  // Additional safety: if still too large, remove oldest entries
+  if (lastByKey.size > MAX_DEDUPE_ENTRIES) {
+    const entries = [...lastByKey.entries()].sort((a, b) => a[1] - b[1]);
+    const toRemove = entries.slice(0, lastByKey.size - MAX_DEDUPE_ENTRIES);
+    for (const [key] of toRemove) {
+      lastByKey.delete(key);
+    }
+  }
+};
 
 let currentSettings: AppSettings = get(settings);
 let unsubscribeEvents: (() => void) | null = null;
@@ -49,13 +72,20 @@ export const snoozeUntilTomorrow = () => {
 
 const ensurePermission = async () => {
   if (!currentSettings.showNotifications) return false;
-  if (!('Notification' in window)) return false;
-  let granted = await isPermissionGranted();
-  if (!granted) {
-    const permission = await requestPermission();
-    granted = permission === 'granted';
+  try {
+    let granted = await isPermissionGranted();
+    if (!granted) {
+      const permission = await requestPermission();
+      granted = permission === 'granted';
+    }
+    return granted;
+  } catch {
+    // Fallback: check browser API if Tauri plugin unavailable
+    if ('Notification' in window) {
+      return Notification.permission === 'granted';
+    }
+    return false;
   }
-  return granted;
 };
 
 const shouldNotify = (event: TrackerEvent) => {
@@ -66,6 +96,7 @@ const shouldNotify = (event: TrackerEvent) => {
   if (isSnoozed()) return false;
 
   pruneRecent();
+  pruneLastByKey();
   if (recentSent.length >= currentSettings.notificationMaxPerHour) return false;
 
   const key = `${event.type}:${event.sessionUid}`;
@@ -108,8 +139,17 @@ const notifyEvent = async (event: TrackerEvent) => {
 
   const title = event.type === 'compact' ? 'Context Compacted' : 'Escalation';
   const body = notificationBody(event);
-  const notification = new Notification(title, { body });
-  notification.onclick = () => focusEvent(event);
+
+  // Use Tauri's notification plugin for proper native notifications
+  try {
+    sendNotification({ title, body });
+  } catch {
+    // Fallback to browser API if Tauri plugin fails (e.g., in dev mode)
+    if ('Notification' in window) {
+      const notification = new Notification(title, { body });
+      notification.onclick = () => focusEvent(event);
+    }
+  }
 };
 
 const handleEventsUpdate = (current: TrackerEvent[]) => {

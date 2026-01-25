@@ -649,5 +649,13 @@ pub async fn get_attach_command(
     _state: State<'_, AppState>,
     pane_id: String,
 ) -> Result<String, String> {
+    // Validate pane_id to prevent shell injection when user copies the command
+    // Valid tmux pane IDs are like "session:window.pane" or "%0", "%1", etc.
+    let is_valid = pane_id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, ':' | '.' | '%' | '-' | '_' | '@'));
+    if !is_valid || pane_id.is_empty() || pane_id.len() > 128 {
+        return Err("Invalid pane ID format".to_string());
+    }
     Ok(format!("tmux attach -t {}", pane_id))
 }

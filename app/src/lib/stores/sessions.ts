@@ -10,10 +10,14 @@ if (typeof window !== 'undefined') {
   try {
     const stored = localStorage.getItem('ntm-pinned-sessions');
     if (stored) {
-      pinnedSessionIdsStore.set(new Set(JSON.parse(stored)));
+      const parsed = JSON.parse(stored);
+      // Validate that parsed value is an array of strings
+      if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')) {
+        pinnedSessionIdsStore.set(new Set(parsed));
+      }
     }
   } catch {
-    // Ignore localStorage errors
+    // Ignore localStorage errors - will use empty Set default
   }
 }
 
