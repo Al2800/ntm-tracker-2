@@ -43,6 +43,9 @@ const backoffMs = (base: number) => {
   return Math.min(30000, base * 2 ** cappedAttempt);
 };
 
+const isVersionMismatch = (message: string) =>
+  /incompatible|protocolversion=|schemaversion=/i.test(message);
+
 export const startConnectionLoop = () => {
   if (connectionLoopRunning) return;
   connectionLoopRunning = true;
@@ -74,6 +77,14 @@ export const startConnectionLoop = () => {
       } else {
         lastErrorStore.set('Daemon is not running');
       }
+
+      const message = health.lastError ?? 'Daemon is not running';
+      if (isVersionMismatch(message)) {
+        connectionStateStore.set('degraded');
+        scheduleNext(intervalMs, tick);
+        return;
+      }
+
       connectionStateStore.set('reconnecting');
       await daemonStart();
       reconnectAttempt += 1;
@@ -82,6 +93,13 @@ export const startConnectionLoop = () => {
       const message =
         error instanceof Error ? error.message : error ? String(error) : 'Unable to reach daemon';
       lastErrorStore.set(message);
+
+      if (isVersionMismatch(message)) {
+        connectionStateStore.set('degraded');
+        scheduleNext(intervalMs, tick);
+        return;
+      }
+
       connectionStateStore.set('reconnecting');
       reconnectAttempt += 1;
       scheduleNext(backoffMs(intervalMs), tick);

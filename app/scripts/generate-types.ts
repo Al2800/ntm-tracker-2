@@ -8,6 +8,10 @@
 import { compile } from 'json-schema-to-typescript';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const SCHEMA_DIR = path.resolve(__dirname, '../../shared/schema');
 const OUTPUT_DIR = path.resolve(__dirname, '../src/lib/generated');
@@ -44,6 +48,7 @@ async function main(): Promise<void> {
     ['types.json', 'types'],
     ['errors.json', 'errors'],
     ['rpc.json', 'rpc'],
+    ['version.json', 'version'],
     ['methods/core.json', 'methods-core'],
     ['methods/sessions.json', 'methods-sessions'],
     ['methods/panes.json', 'methods-panes'],

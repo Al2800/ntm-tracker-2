@@ -47,6 +47,43 @@ pub struct HealthResponse {
     pub last_error: Option<String>,
 }
 
+const EXPECTED_PROTOCOL_VERSION: u64 = 1;
+const EXPECTED_SCHEMA_VERSION: u64 = 1;
+
+fn validate_daemon_hello(manager: &DaemonManager) -> Result<(), String> {
+    let timeout = Duration::from_secs(5);
+    let hello = manager.call("core.hello".to_string(), Value::Null, timeout)?;
+
+    let daemon_version = hello
+        .get("daemonVersion")
+        .and_then(|value| value.as_str())
+        .unwrap_or("<unknown>");
+
+    let protocol_version = hello
+        .get("protocolVersion")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| "Daemon hello missing protocolVersion".to_string())?;
+
+    let schema_version = hello
+        .get("schemaVersion")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| "Daemon hello missing schemaVersion".to_string())?;
+
+    if protocol_version != EXPECTED_PROTOCOL_VERSION {
+        return Err(format!(
+            "Daemon version {daemon_version} is incompatible: protocolVersion={protocol_version} (expected {EXPECTED_PROTOCOL_VERSION})"
+        ));
+    }
+
+    if schema_version != EXPECTED_SCHEMA_VERSION {
+        return Err(format!(
+            "Daemon version {daemon_version} is incompatible: schemaVersion={schema_version} (expected {EXPECTED_SCHEMA_VERSION})"
+        ));
+    }
+
+    Ok(())
+}
+
 #[derive(Debug)]
 pub(crate) struct DaemonState {
     pub(crate) manager: Option<DaemonManager>,
@@ -264,6 +301,13 @@ pub async fn daemon_start(_app: AppHandle, state: State<'_, AppState>) -> Result
 
     match DaemonManager::start(&guard.settings.transport) {
         Ok(manager) => {
+            if let Err(err) = validate_daemon_hello(&manager) {
+                let _ = manager.stop();
+                guard.manager = None;
+                guard.last_error = Some(err.clone());
+                return Err(err);
+            }
+
             guard.manager = Some(manager);
             guard.last_error = None;
             Ok(())
@@ -301,6 +345,13 @@ pub async fn daemon_restart(_app: AppHandle, state: State<'_, AppState>) -> Resu
 
     match DaemonManager::start(&guard.settings.transport) {
         Ok(manager) => {
+            if let Err(err) = validate_daemon_hello(&manager) {
+                let _ = manager.stop();
+                guard.manager = None;
+                guard.last_error = Some(err.clone());
+                return Err(err);
+            }
+
             guard.manager = Some(manager);
             guard.last_error = None;
             Ok(())

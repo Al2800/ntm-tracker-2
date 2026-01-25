@@ -71,6 +71,18 @@ pub struct Capabilities {
     pub systemd: bool,
 }
 
+/// Hello payload matching shared/schema/version.json Hello
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Hello {
+    pub daemon_version: String,
+    pub protocol_version: u32,
+    pub schema_version: u32,
+    pub capabilities: Capabilities,
+    pub instance_id: String,
+    pub run_id: String,
+}
+
 /// Stats summary matching types.json StatsSummary
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -152,6 +164,18 @@ mod tests {
         assert!(json.contains("\"totalCompacts\""));
         assert!(json.contains("\"activeMinutes\""));
         assert!(json.contains("\"estimatedTokens\""));
+    }
+
+    #[test]
+    fn test_hello_schema() {
+        let schema = schema_for!(Hello);
+        let json = serde_json::to_string_pretty(&schema).unwrap();
+        assert!(json.contains("\"daemonVersion\""));
+        assert!(json.contains("\"protocolVersion\""));
+        assert!(json.contains("\"schemaVersion\""));
+        assert!(json.contains("\"capabilities\""));
+        assert!(json.contains("\"instanceId\""));
+        assert!(json.contains("\"runId\""));
     }
 
     #[test]

@@ -25,6 +25,12 @@ pub async fn run(ctx: Arc<RpcContext>, mut notification_rx: mpsc::Receiver<JsonR
 
     info!("stdio transport started");
 
+    let hello = JsonRpcNotification::new("core.hello", rpc::hello_payload(ctx.as_ref()));
+    if let Err(e) = write_notification(&mut stdout, &hello).await {
+        error!(error = %e, "failed to write hello notification");
+        return;
+    }
+
     loop {
         tokio::select! {
             // Handle incoming requests from stdin

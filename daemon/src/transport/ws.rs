@@ -155,6 +155,12 @@ impl WsServer {
         let mut client_ctx = (*ctx).clone();
         client_ctx.is_admin = is_admin;
 
+        // Send hello notification immediately after connect for version/capability handshake.
+        let hello = JsonRpcNotification::new("core.hello", rpc::hello_payload(&client_ctx));
+        if let Ok(json) = serde_json::to_string(&hello) {
+            let _ = tx.send(json).await;
+        }
+
         // Process incoming messages
         while let Some(msg) = read.next().await {
             match msg {

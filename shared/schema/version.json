@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://ntracker.local/schema/version.json",
+  "title": "Version Handshake",
+  "description": "Version and capability handshake payloads for daemon/client compatibility checks",
+  "definitions": {
+    "Hello": {
+      "type": "object",
+      "required": [
+        "daemonVersion",
+        "protocolVersion",
+        "schemaVersion",
+        "capabilities",
+        "instanceId",
+        "runId"
+      ],
+      "properties": {
+        "daemonVersion": {
+          "type": "string",
+          "description": "Daemon build version"
+        },
+        "protocolVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "JSON-RPC protocol version"
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "SQLite schema version"
+        },
+        "capabilities": {
+          "$ref": "types.json#/definitions/Capabilities"
+        },
+        "instanceId": {
+          "type": "string",
+          "description": "Stable UUID for the daemon instance"
+        },
+        "runId": {
+          "type": "string",
+          "description": "UUID for the current daemon run"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
