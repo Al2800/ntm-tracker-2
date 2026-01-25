@@ -18,5 +18,8 @@ tokio = { version = "1", features = ["time"] }
 tungstenite = "0.27"
 url = "2.5.4"
 
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
+
 [features]
 custom-protocol = ["tauri/custom-protocol"]

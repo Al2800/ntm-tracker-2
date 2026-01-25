@@ -49,6 +49,7 @@ export interface DailyStats {
 export interface AppSettings {
   transport: 'wsl-stdio' | 'ws' | 'http';
   reconnectIntervalMs: number;
+  autostartEnabled: boolean;
   showNotifications: boolean;
   notifyOnCompact: boolean;
   notifyOnEscalation: boolean;

@@ -4,6 +4,7 @@ import type { AppSettings } from '../types';
 const defaultSettings: AppSettings = {
   transport: 'wsl-stdio',
   reconnectIntervalMs: 5000,
+  autostartEnabled: true,
   showNotifications: true,
   notifyOnCompact: true,
   notifyOnEscalation: true,

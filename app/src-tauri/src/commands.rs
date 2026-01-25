@@ -1,3 +1,4 @@
+use crate::autostart;
 use crate::daemon::DaemonManager;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -5,10 +6,11 @@ use std::{fs, path::PathBuf, sync::Mutex, time::Duration};
 use tauri::{AppHandle, Manager, State};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 pub struct AppSettings {
     pub transport: String,
     pub reconnect_interval_ms: u64,
+    pub autostart_enabled: bool,
     pub show_notifications: bool,
     pub notify_on_compact: bool,
     pub notify_on_escalation: bool,
@@ -20,6 +22,7 @@ impl Default for AppSettings {
         Self {
             transport: "wsl-stdio".to_string(),
             reconnect_interval_ms: 5000,
+            autostart_enabled: true,
             show_notifications: true,
             notify_on_compact: true,
             notify_on_escalation: true,
@@ -208,6 +211,9 @@ pub async fn set_settings(
         .0
         .lock()
         .map_err(|_| "App state lock poisoned".to_string())?;
+    if guard.settings.autostart_enabled != settings.autostart_enabled {
+        autostart::set_enabled(settings.autostart_enabled)?;
+    }
     guard.settings = settings.clone();
     persist_settings(&app, &settings)
 }
