@@ -122,6 +122,11 @@ Pre-built component classes in `app.css`:
 <div class="card">Standard card</div>
 <div class="card-lg">Large feature card</div>
 <div class="card-compact">Compact card</div>
+
+<!-- Interactive states -->
+<div class="card card-interactive">Clickable card</div>
+<div class="card card-selected">Selected card</div>
+<div class="card card-critical">Critical/alert card</div>
 ```
 
 ### Labels
@@ -145,6 +150,31 @@ Pre-built component classes in `app.css`:
 <button class="btn btn-primary">Primary Action</button>
 <button class="btn btn-secondary">Secondary</button>
 <button class="btn btn-ghost">Ghost</button>
+<button class="btn btn-danger">Danger</button>
+<button class="btn btn-success">Success</button>
+
+<!-- Size variants -->
+<button class="btn btn-sm btn-secondary">Small</button>
+<button class="btn btn-lg btn-primary">Large</button>
+
+<!-- Disabled state -->
+<button class="btn btn-primary" disabled>Disabled</button>
+```
+
+### Chips / Filters
+```html
+<span class="chip chip-default">Filter</span>
+<span class="chip chip-active">Active Filter</span>
+<span class="chip chip-success">Success</span>
+<span class="chip chip-warning">Warning</span>
+<span class="chip chip-error">Error</span>
+```
+
+### Status Indicator Dots
+```html
+<span class="status-dot status-dot-success"></span>
+<span class="status-dot status-dot-warning status-dot-pulse"></span>
+<span class="status-dot status-dot-error"></span>
 ```
 
 ### Inputs
@@ -156,6 +186,13 @@ Pre-built component classes in `app.css`:
 ```html
 <div class="tray-item">Standard tray row</div>
 <div class="tray-item-compact">Compact tray row</div>
+<div class="tray-item tray-item-critical">Critical tray row</div>
+```
+
+### Dividers
+```html
+<div class="divider"></div>
+<div class="divider-subtle"></div>
 ```
 
 ## Animation

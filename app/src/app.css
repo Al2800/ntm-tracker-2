@@ -71,20 +71,32 @@
   /*
    * ──────────────────────────────────────────────────────────────────────────
    * BUTTON STYLES
-   * Standard interactive buttons
+   * Standard interactive buttons with state variants
    * ──────────────────────────────────────────────────────────────────────────
    */
   .btn {
-    @apply inline-flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-border-focus focus:ring-offset-2 focus:ring-offset-surface-base;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-border-focus focus:ring-offset-2 focus:ring-offset-surface-base disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-sm {
+    @apply px-2 py-1 text-xs;
+  }
+  .btn-lg {
+    @apply px-4 py-3 text-base;
   }
   .btn-primary {
-    @apply border-accent bg-accent text-text-inverse hover:bg-accent-hover;
+    @apply border-accent bg-accent text-text-inverse hover:bg-accent-hover active:bg-accent;
   }
   .btn-secondary {
-    @apply border-border bg-surface-base text-text-primary hover:border-border-strong;
+    @apply border-border bg-surface-base text-text-primary hover:border-border-strong hover:bg-surface-raised active:bg-surface-base;
   }
   .btn-ghost {
-    @apply border-transparent bg-transparent text-text-secondary hover:bg-surface-raised hover:text-text-primary;
+    @apply border-transparent bg-transparent text-text-secondary hover:bg-surface-raised hover:text-text-primary active:bg-surface-base;
+  }
+  .btn-danger {
+    @apply border-status-error bg-status-error-muted text-status-error-text hover:bg-status-error hover:text-white active:bg-status-error-muted;
+  }
+  .btn-success {
+    @apply border-status-success bg-status-success-muted text-status-success-text hover:bg-status-success hover:text-white active:bg-status-success-muted;
   }
 
   /*
@@ -99,14 +111,99 @@
 
   /*
    * ──────────────────────────────────────────────────────────────────────────
+   * CHIP / FILTER STYLES
+   * Toggleable chips for filtering and selection
+   * ──────────────────────────────────────────────────────────────────────────
+   */
+  .chip {
+    @apply inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors;
+  }
+  .chip-default {
+    @apply border-border bg-surface-base text-text-secondary hover:border-border-strong hover:text-text-primary;
+  }
+  .chip-active {
+    @apply border-accent bg-accent-muted text-accent;
+  }
+  .chip-success {
+    @apply border-status-success-ring bg-status-success-muted text-status-success-text;
+  }
+  .chip-warning {
+    @apply border-status-warning-ring bg-status-warning-muted text-status-warning-text;
+  }
+  .chip-error {
+    @apply border-status-error-ring bg-status-error-muted text-status-error-text;
+  }
+
+  /*
+   * ──────────────────────────────────────────────────────────────────────────
+   * CARD INTERACTIVE STATES
+   * Cards with hover/focus/selected states
+   * ──────────────────────────────────────────────────────────────────────────
+   */
+  .card-interactive {
+    @apply cursor-pointer transition-all hover:border-border-strong hover:shadow-elevation-1;
+  }
+  .card-selected {
+    @apply border-accent ring-1 ring-accent/30;
+  }
+  .card-critical {
+    @apply border-status-error-ring bg-status-error-muted;
+  }
+
+  /*
+   * ──────────────────────────────────────────────────────────────────────────
+   * STATUS INDICATOR DOTS
+   * Small dots for inline status indication
+   * ──────────────────────────────────────────────────────────────────────────
+   */
+  .status-dot {
+    @apply inline-block h-2 w-2 rounded-full;
+  }
+  .status-dot-success {
+    @apply bg-status-success;
+  }
+  .status-dot-warning {
+    @apply bg-status-warning;
+  }
+  .status-dot-error {
+    @apply bg-status-error;
+  }
+  .status-dot-info {
+    @apply bg-status-info;
+  }
+  .status-dot-neutral {
+    @apply bg-status-neutral;
+  }
+  .status-dot-pulse {
+    @apply animate-pulse-slow;
+  }
+
+  /*
+   * ──────────────────────────────────────────────────────────────────────────
    * TRAY-SPECIFIC COMPACT STYLES
    * Ultra-compact styles for tray popover
    * ──────────────────────────────────────────────────────────────────────────
    */
   .tray-item {
-    @apply flex items-center justify-between rounded-lg border border-border bg-surface-base px-3 py-2 text-sm;
+    @apply flex items-center justify-between rounded-lg border border-border bg-surface-base px-3 py-2 text-sm transition-colors hover:border-border-strong;
   }
   .tray-item-compact {
     @apply flex items-center justify-between rounded border border-border bg-surface-base px-2 py-1 text-xs;
+  }
+  .tray-item-critical {
+    @apply border-status-error-ring bg-status-error-muted;
+  }
+
+  /*
+   * ──────────────────────────────────────────────────────────────────────────
+   * DIVIDER
+   * Horizontal dividers for section separation
+   * ──────────────────────────────────────────────────────────────────────────
+   */
+  .divider {
+    @apply h-px w-full bg-border;
+  }
+  .divider-subtle {
+    @apply h-px w-full bg-border-subtle;
   }
 }
