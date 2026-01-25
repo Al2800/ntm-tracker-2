@@ -17,7 +17,10 @@ pub struct StdioTransport {
 
 impl StdioTransport {
     pub fn spawn(mut command: Command) -> Result<Self, String> {
-        command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+        command
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
 
         let mut child = command
             .spawn()

@@ -2067,6 +2067,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-notification",
  "tauri-plugin-shell",
+ "tokio",
  "tungstenite",
  "url",
 ]

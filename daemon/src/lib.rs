@@ -13,6 +13,7 @@ pub mod models;
 pub mod rpc;
 pub mod redaction;
 pub mod state;
+pub mod reconcile;
 
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")

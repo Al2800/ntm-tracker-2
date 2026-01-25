@@ -37,10 +37,10 @@ pub struct HealthResponse {
 }
 
 #[derive(Debug)]
-struct DaemonState {
-    manager: Option<DaemonManager>,
-    last_error: Option<String>,
-    settings: AppSettings,
+pub(crate) struct DaemonState {
+    pub(crate) manager: Option<DaemonManager>,
+    pub(crate) last_error: Option<String>,
+    pub(crate) settings: AppSettings,
 }
 
 pub struct AppState(pub Mutex<DaemonState>);
@@ -66,8 +66,7 @@ fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = resolver
         .app_config_dir()
         .ok_or_else(|| "Unable to resolve app config directory".to_string())?;
-    fs::create_dir_all(&dir)
-        .map_err(|err| format!("Unable to create config directory: {err}"))?;
+    fs::create_dir_all(&dir).map_err(|err| format!("Unable to create config directory: {err}"))?;
     Ok(dir.join("settings.json"))
 }
 
@@ -121,7 +120,10 @@ pub async fn daemon_stop(_app: AppHandle, state: State<'_, AppState>) -> Result<
 }
 
 #[tauri::command]
-pub async fn daemon_health(_app: AppHandle, state: State<'_, AppState>) -> Result<HealthResponse, String> {
+pub async fn daemon_health(
+    _app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<HealthResponse, String> {
     let guard = state
         .0
         .lock()
@@ -168,7 +170,10 @@ pub async fn rpc_call(
 }
 
 #[tauri::command]
-pub async fn get_settings(_app: AppHandle, state: State<'_, AppState>) -> Result<AppSettings, String> {
+pub async fn get_settings(
+    _app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<AppSettings, String> {
     let guard = state
         .0
         .lock()
@@ -205,19 +210,27 @@ pub async fn export_diagnostics(
         settings: AppSettings,
     }
 
-    let (running, last_error, settings) = {
+    let (daemon_running, last_error, settings) = {
         let guard = state
             .0
             .lock()
             .map_err(|_| "App state lock poisoned".to_string())?;
-        (guard.running, guard.last_error.clone(), guard.settings.clone())
+        (
+            guard
+                .manager
+                .as_ref()
+                .map(|manager| manager.is_running())
+                .unwrap_or(false),
+            guard.last_error.clone(),
+            guard.settings.clone(),
+        )
     };
 
     let info = app.package_info();
     let payload = Diagnostics {
         app_name: info.name.clone(),
         app_version: info.version.to_string(),
-        daemon_running: running,
+        daemon_running,
         last_error,
         settings,
     };

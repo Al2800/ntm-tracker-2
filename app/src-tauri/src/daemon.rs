@@ -46,9 +46,7 @@ impl DaemonManager {
 fn wsl_stdio_command() -> Command {
     let mut cmd = Command::new("wsl.exe");
     // TODO: make distro + daemon path configurable via settings.
-    cmd.arg("--")
-        .arg("ntm-tracker-daemon")
-        .arg("--stdio");
+    cmd.arg("--").arg("ntm-tracker-daemon").arg("--stdio");
     cmd
 }
 

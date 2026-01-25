@@ -3,6 +3,7 @@
 mod commands;
 mod daemon;
 mod transport;
+mod tray;
 
 use commands::{
     daemon_health, daemon_start, daemon_stop, export_diagnostics, get_attach_command, get_settings,
@@ -16,6 +17,8 @@ fn main() {
         .setup(|app| {
             let settings = load_settings(app.handle());
             app.manage(AppState::new(settings));
+            tray::init(app.handle())?;
+            tray::spawn_updater(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
