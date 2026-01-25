@@ -1,0 +1,71 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  daemon:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Format (Rust)
+        run: cargo fmt --check --manifest-path daemon/Cargo.toml
+
+      - name: Lint (clippy)
+        run: cargo clippy --manifest-path daemon/Cargo.toml --all-targets -- -D warnings
+
+      - name: Test (daemon)
+        run: cargo test --manifest-path daemon/Cargo.toml
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install deps
+        run: npm -C app ci
+
+      - name: Typecheck
+        run: npm -C app run check
+
+  windows-msi:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install deps
+        run: npm -C app ci
+
+      - name: Build MSI
+        run: npm -C app run tauri build -- --bundles msi
+
+      - name: Upload MSI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ntm-tracker-msi
+          path: app/src-tauri/target/release/bundle/msi/*.msi
+
