@@ -323,34 +323,68 @@
           </div>
 
           {#if $selectedSession}
-            <div class="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5">
+            {@const sessionStatus = getSessionStatus($selectedSession.status)}
+            <div class="card">
+              <!-- Session header with status and metrics -->
               <div class="flex items-start justify-between gap-4">
                 <div>
-                  <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Session Focus</p>
-                  <p class="mt-2 text-xl font-semibold text-white">{$selectedSession.name}</p>
-                  <p class="mt-1 text-xs text-slate-500">{$selectedSession.sessionUid}</p>
+                  <p class="label">Session Focus</p>
+                  <p class="mt-2 text-xl font-semibold text-text-primary">{$selectedSession.name}</p>
+                  <div class="mt-1 flex items-center gap-2">
+                    <span class="badge {sessionStatus.badge}">
+                      <span class="status-dot {sessionStatus.dot}"></span>
+                      {sessionStatus.label}
+                    </span>
+                    <span class="text-xs text-text-subtle font-mono">{$selectedSession.sessionUid.slice(0, 12)}</span>
+                  </div>
                 </div>
                 <button
-                  class="rounded-lg border border-slate-700/80 bg-slate-950 px-3 py-2 text-xs text-slate-300 transition hover:border-slate-500"
+                  class="btn btn-sm btn-secondary"
                   type="button"
                   on:click={() => selectSession(null)}
                 >
                   Clear focus
                 </button>
               </div>
-              <PaneList
-                panes={$selectedSession.panes ?? []}
-                selectable
-                selectedPaneId={selectedPaneId}
-                on:select={(event) => (selectedPaneId = event.detail.paneUid)}
-              />
+
+              <!-- Session metrics -->
+              <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+                <div class="rounded-lg border border-border bg-surface-base px-2 py-2">
+                  <p class="text-lg font-bold text-text-primary">{$selectedSession.paneCount ?? ($selectedSession.panes?.length ?? 0)}</p>
+                  <p class="label-sm">Panes</p>
+                </div>
+                <div class="rounded-lg border border-border bg-surface-base px-2 py-2">
+                  <p class="text-lg font-bold text-status-success">{($selectedSession.panes ?? []).filter(p => p.status === 'active').length}</p>
+                  <p class="label-sm">Active</p>
+                </div>
+                <div class="rounded-lg border border-border bg-surface-base px-2 py-2">
+                  <p class="text-lg font-bold text-status-warning">{($selectedSession.panes ?? []).filter(p => p.status === 'waiting').length}</p>
+                  <p class="label-sm">Waiting</p>
+                </div>
+              </div>
+
+              <!-- Pane list -->
               <div class="mt-4">
+                <p class="label mb-2">Panes</p>
+                <PaneList
+                  panes={$selectedSession.panes ?? []}
+                  selectable
+                  selectedPaneId={selectedPaneId}
+                  on:select={(event) => (selectedPaneId = event.detail.paneUid)}
+                />
+              </div>
+
+              <!-- Output preview -->
+              <div class="mt-4">
+                <p class="label mb-2">Output Preview</p>
                 <OutputPreview paneId={selectedPaneId} />
               </div>
             </div>
           {:else}
-            <div class="rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-6 text-sm text-slate-500">
-              Select a session to inspect pane details and live output.
+            <div class="card border-dashed bg-surface-base/40 p-6">
+              <p class="text-sm text-text-subtle text-center">
+                Select a session to inspect pane details and live output.
+              </p>
             </div>
           {/if}
 
