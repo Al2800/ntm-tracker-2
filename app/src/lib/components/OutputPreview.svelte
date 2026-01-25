@@ -214,18 +214,18 @@
   });
 </script>
 
-<div class="rounded-2xl border border-slate-800/80 bg-slate-950/50 p-5">
+<div class="card-lg">
   <div class="flex flex-wrap items-start justify-between gap-4">
     <div>
-      <p class="text-sm font-semibold text-white">Output preview</p>
-      <p class="mt-1 text-xs text-slate-400">
+      <p class="text-sm font-semibold text-text-primary">Output preview</p>
+      <p class="mt-1 text-xs text-text-muted">
         Fetched on demand via <code class="font-mono">tmux capture-pane</code>. Redaction is applied server-side.
       </p>
     </div>
 
     <div class="flex flex-wrap items-center gap-2">
       <button
-        class="rounded-lg border border-slate-700/80 bg-slate-900 px-3 py-2 text-sm text-slate-100 transition hover:border-slate-500 disabled:opacity-40"
+        class="btn btn-secondary"
         on:click={loadPreview}
         disabled={loading || !paneId}
       >
@@ -236,7 +236,7 @@
         {/if}
       </button>
 
-      <label class="flex items-center gap-2 text-xs text-slate-300">
+      <label class="flex items-center gap-2 text-xs text-text-secondary">
         <input
           type="checkbox"
           checked={autoRefresh}
@@ -247,7 +247,7 @@
       </label>
 
       <button
-        class="rounded-lg border border-slate-700/80 bg-slate-900 px-3 py-2 text-sm text-slate-100 transition hover:border-slate-500 disabled:opacity-40"
+        class="btn btn-secondary"
         on:click={() => preview && copyText(preview.content)}
         disabled={!preview}
       >
@@ -255,7 +255,7 @@
       </button>
 
       <button
-        class="rounded-lg border border-slate-700/80 bg-slate-900 px-3 py-2 text-sm text-slate-100 transition hover:border-slate-500 disabled:opacity-40"
+        class="btn btn-secondary"
         on:click={handleAttach}
         disabled={attachLoading || !paneId}
       >
@@ -265,25 +265,25 @@
   </div>
 
   {#if error}
-    <div class="mt-4 rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+    <div class="mt-4 rounded-lg border border-status-error-ring bg-status-error-muted px-4 py-3 text-sm text-status-error-text">
       {error}
     </div>
   {/if}
 
   {#if !preview}
-    <p class="mt-4 text-sm text-slate-300/80">
-      Select “Load preview” to fetch the last {MAX_LINES} lines. (This call is redacted and may be truncated.)
+    <p class="mt-4 text-sm text-text-muted">
+      Select "Load preview" to fetch the last {MAX_LINES} lines. (This call is redacted and may be truncated.)
     </p>
   {:else}
-    <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
+    <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-text-muted">
       <div class="flex flex-wrap items-center gap-3">
         <span>{preview.lines} lines</span>
         <span>{preview.bytes} bytes</span>
         {#if preview.truncated}
-          <span class="rounded-full bg-amber-500/20 px-2 py-0.5 text-amber-200">truncated</span>
+          <span class="badge badge-warning py-0 px-2 text-2xs">truncated</span>
         {/if}
         {#if preview.redacted}
-          <span class="rounded-full bg-slate-800 px-2 py-0.5 text-slate-200">redacted</span>
+          <span class="badge badge-neutral py-0 px-2 text-2xs">redacted</span>
         {/if}
       </div>
       <span>pane: {preview.paneId}</span>
@@ -298,7 +298,7 @@
           compact
         />
       {:else}
-        <pre class="whitespace-pre-wrap font-mono text-xs leading-relaxed text-slate-100"
+        <pre class="whitespace-pre-wrap font-mono text-xs leading-relaxed text-text-primary"
           >{@html ansiHtml}</pre
         >
       {/if}

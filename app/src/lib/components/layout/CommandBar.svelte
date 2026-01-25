@@ -42,10 +42,6 @@
   function toggleNotifications() {
     updateSettings({ showNotifications: !$settings.showNotifications });
   }
-
-  function focusSearch() {
-    searchInput?.focus();
-  }
 </script>
 
 <div class="flex h-14 items-center justify-between gap-4 px-4">
