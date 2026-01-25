@@ -3,6 +3,7 @@
   import { events } from '../stores/events';
   import { getEscalationSeverity, ESCALATION_SEVERITY, type EscalationSeverity } from '../status';
   import type { TrackerEvent } from '../types';
+  import EmptyState from './states/EmptyState.svelte';
 
   const dispatch = createEventDispatcher<{
     focus: { eventId: number };
@@ -56,9 +57,13 @@
   </div>
 
   {#if sorted.length === 0}
-    <div class="mt-4 rounded-xl border border-dashed border-border bg-surface-base p-6 text-center">
-      <p class="text-sm text-text-subtle">Inbox clear</p>
-      <p class="mt-1 text-xs text-text-muted">Escalations will appear here as they trigger.</p>
+    <div class="mt-4">
+      <EmptyState
+        icon="escalations"
+        title="Inbox clear"
+        description="Escalations will appear here as they trigger."
+        compact
+      />
     </div>
   {:else}
     <div class="mt-4 space-y-3">

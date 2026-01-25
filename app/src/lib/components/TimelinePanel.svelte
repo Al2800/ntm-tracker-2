@@ -3,6 +3,7 @@
   import { selectedSession } from '../stores/sessions';
   import { getEventType } from '../status';
   import type { TrackerEvent } from '../types';
+  import EmptyState from './states/EmptyState.svelte';
 
   export let limit = 20;
 
@@ -60,9 +61,13 @@
   </div>
 
   {#if sorted.length === 0}
-    <div class="mt-4 rounded-xl border border-dashed border-border bg-surface-base p-6 text-center">
-      <p class="text-sm text-text-subtle">No events yet</p>
-      <p class="mt-1 text-xs text-text-muted">Events will appear as sessions run.</p>
+    <div class="mt-4">
+      <EmptyState
+        icon="timeline"
+        title="No events yet"
+        description="Events will appear as sessions run."
+        compact
+      />
     </div>
   {:else}
     <div class="mt-4 space-y-1.5 max-h-[320px] overflow-y-auto">

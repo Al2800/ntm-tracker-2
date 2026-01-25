@@ -9,6 +9,7 @@
   import type { Session } from '$lib/types';
   import { sessions, selectedSessionId, selectSession } from '$lib/stores/sessions';
   import SessionItem from './SessionItem.svelte';
+  import EmptyState from './states/EmptyState.svelte';
 
   export let searchQuery = '';
 
@@ -120,13 +121,12 @@
   <!-- Session list -->
   <div class="flex-1 space-y-1.5 overflow-y-auto">
     {#if filteredSessions.length === 0}
-      <div class="rounded-lg border border-dashed border-border bg-surface-base p-4 text-center text-xs text-text-subtle">
-        {#if searchQuery || statusFilter !== 'all'}
-          No sessions match your filters
-        {:else}
-          No sessions yet
-        {/if}
-      </div>
+      <EmptyState
+        icon={searchQuery || statusFilter !== 'all' ? 'search' : 'sessions'}
+        title={searchQuery || statusFilter !== 'all' ? 'No sessions match your filters' : 'No sessions yet'}
+        description={searchQuery || statusFilter !== 'all' ? 'Try adjusting your search or filters.' : 'Sessions will appear when NTM detects running tmux sessions.'}
+        compact
+      />
     {:else}
       {#each filteredSessions as session (session.sessionUid)}
         <SessionItem
