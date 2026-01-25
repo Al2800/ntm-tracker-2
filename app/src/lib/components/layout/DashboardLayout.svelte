@@ -13,6 +13,9 @@
 </script>
 
 <div class="layout-root min-h-screen bg-surface-base text-text-primary">
+  <!-- Skip link for keyboard navigation -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
   <!-- Background gradient -->
   <div class="pointer-events-none fixed inset-0 bg-gradient-hero" aria-hidden="true"></div>
 
@@ -70,7 +73,11 @@
         </main>
 
         <!-- Right panel (insights) - hidden on smaller screens -->
-        <aside class="hidden w-80 shrink-0 flex-col border-l border-border bg-surface-raised/30 xl:flex 2xl:w-96">
+        <aside
+          class="hidden w-80 shrink-0 flex-col border-l border-border bg-surface-raised/30 xl:flex 2xl:w-96"
+          role="complementary"
+          aria-label="Activity insights"
+        >
           <div class="flex-1 overflow-y-auto p-4">
             <slot name="insights" />
           </div>
