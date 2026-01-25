@@ -12,6 +12,8 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio_tungstenite::tungstenite::handshake::server::{ErrorResponse, Request, Response};
+use tokio_tungstenite::tungstenite::http::StatusCode;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{debug, error, info, trace, warn};
 
@@ -107,13 +109,96 @@ impl WsServer {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         debug!(addr = %addr, "new WebSocket connection");
 
-        // Perform WebSocket handshake with callback for auth
-        let ws_stream = tokio_tungstenite::accept_async(stream).await?;
-        let (mut write, mut read) = ws_stream.split();
+        // Extract auth info during WebSocket handshake
+        let auth_result = Arc::new(std::sync::Mutex::new(None::<bool>));
+        let auth_result_clone = auth_result.clone();
+        let config_clone = self.config.clone();
 
-        // For now, we'll check auth on first message or via query params
-        // In a real implementation, we'd extract the token from the upgrade request
-        let is_admin = false; // Will be set based on token
+        let callback = move |req: &Request, response: Response| -> Result<Response, ErrorResponse> {
+            // Try to extract token from query string first
+            let uri = req.uri();
+            let mut token: Option<&str> = None;
+
+            // Parse query string for ?token=xxx
+            if let Some(query) = uri.query() {
+                for pair in query.split('&') {
+                    if let Some(value) = pair.strip_prefix("token=") {
+                        token = Some(value);
+                        break;
+                    }
+                }
+            }
+
+            // If no query token, try Authorization header
+            if token.is_none() {
+                if let Some(auth_header) = req.headers().get("authorization") {
+                    if let Ok(auth_str) = auth_header.to_str() {
+                        if auth_str.to_lowercase().starts_with("bearer ") {
+                            token = Some(&auth_str[7..]);
+                        }
+                    }
+                }
+            }
+
+            // Authenticate the token
+            let is_admin = if let Some(tok) = token {
+                // Check admin token
+                if let Some(admin_token) = &config_clone.admin_token {
+                    if tok == admin_token {
+                        Some(true)
+                    } else if config_clone.tokens.contains(&tok.to_string()) {
+                        Some(false)
+                    } else {
+                        None // Invalid token
+                    }
+                } else if config_clone.tokens.contains(&tok.to_string()) {
+                    Some(false)
+                } else {
+                    None // Invalid token
+                }
+            } else {
+                // No token provided - allow only if no tokens are configured
+                if config_clone.admin_token.is_none() && config_clone.tokens.is_empty() {
+                    Some(false) // No auth required, non-admin access
+                } else {
+                    None // Auth required but not provided
+                }
+            };
+
+            // Store auth result for use after handshake
+            if let Ok(mut guard) = auth_result_clone.lock() {
+                *guard = is_admin;
+            }
+
+            // Reject connection during handshake if auth failed
+            if is_admin.is_none() {
+                let reject = tokio_tungstenite::tungstenite::http::Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .body(Some("Unauthorized: missing or invalid token".to_string()))
+                    .unwrap();
+                return Err(reject);
+            }
+
+            Ok(response)
+        };
+
+        // Perform WebSocket handshake with auth callback
+        let ws_stream = match tokio_tungstenite::accept_hdr_async(stream, callback).await {
+            Ok(ws) => ws,
+            Err(e) => {
+                // This includes auth rejections - log and return
+                warn!(addr = %addr, error = %e, "WebSocket handshake failed");
+                return Ok(());
+            }
+        };
+
+        // Get auth result (should always be Some at this point since we reject None in callback)
+        let is_admin = match auth_result.lock() {
+            Ok(guard) => guard.unwrap_or(false),
+            Err(_) => false,
+        };
+
+        let (mut write, mut read) = ws_stream.split();
 
         // Register client
         {
@@ -128,7 +213,7 @@ impl WsServer {
             );
         }
 
-        info!(addr = %addr, "WebSocket client connected");
+        info!(addr = %addr, is_admin = %is_admin, "WebSocket client connected");
 
         // Subscribe to notifications
         let mut notification_rx = self.notification_tx.subscribe();
@@ -255,8 +340,9 @@ impl WsServer {
     }
 
     /// Authenticate a token and return whether it's an admin token.
-    #[allow(dead_code)]
-    fn authenticate(&self, token: &str) -> Option<bool> {
+    /// Returns `Some(true)` for admin tokens, `Some(false)` for regular tokens,
+    /// and `None` for invalid tokens.
+    pub fn authenticate(&self, token: &str) -> Option<bool> {
         if let Some(admin_token) = &self.config.admin_token {
             if token == admin_token {
                 return Some(true);
@@ -298,5 +384,40 @@ mod tests {
         assert_eq!(server.authenticate("admin123"), Some(true));
         assert_eq!(server.authenticate("user456"), Some(false));
         assert_eq!(server.authenticate("invalid"), None);
+    }
+
+    #[test]
+    fn authenticate_regular_token_without_admin() {
+        let config = WsConfig {
+            port: 3847,
+            admin_token: None,
+            tokens: vec!["user123".to_string(), "user456".to_string()],
+        };
+        let server = WsServer::new(config);
+
+        assert_eq!(server.authenticate("user123"), Some(false));
+        assert_eq!(server.authenticate("user456"), Some(false));
+        assert_eq!(server.authenticate("invalid"), None);
+    }
+
+    #[test]
+    fn authenticate_empty_config_rejects_all() {
+        let server = WsServer::new(WsConfig::default());
+        // With no tokens configured, authenticate() returns None for any token
+        // (but handle_connection allows unauthenticated access in this case)
+        assert_eq!(server.authenticate("anything"), None);
+    }
+
+    #[test]
+    fn authenticate_admin_takes_priority() {
+        // If same token is in both admin_token and tokens, admin wins
+        let config = WsConfig {
+            port: 3847,
+            admin_token: Some("shared".to_string()),
+            tokens: vec!["shared".to_string()],
+        };
+        let server = WsServer::new(config);
+
+        assert_eq!(server.authenticate("shared"), Some(true)); // Admin takes priority
     }
 }
