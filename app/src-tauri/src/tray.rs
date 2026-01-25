@@ -13,6 +13,7 @@ use tauri::{AppHandle, Emitter, Manager};
 const TRAY_ID: &str = "ntm-tracker-tray";
 const MENU_STATUS: &str = "tray_status";
 const MENU_SESSIONS_MENU: &str = "tray_sessions_menu";
+const MENU_SEARCH_SESSIONS: &str = "tray_search_sessions";
 const MENU_OPEN_DASHBOARD: &str = "tray_open_dashboard";
 const MENU_SNOOZE_NOTIFICATIONS: &str = "tray_snooze_notifications";
 const MENU_SETTINGS: &str = "tray_settings";
@@ -140,6 +141,15 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     )?;
     sessions_menu.append(&placeholder)?;
     menu.append(&sessions_menu)?;
+
+    let search_sessions = MenuItem::with_id(
+        app,
+        MENU_SEARCH_SESSIONS,
+        "Search Sessions...",
+        true,
+        None::<&str>,
+    )?;
+    menu.append(&search_sessions)?;
     menu.append(&PredefinedMenuItem::separator(app)?)?;
 
     let open_dashboard = MenuItem::with_id(
@@ -183,6 +193,10 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
             }
 
             match id {
+                MENU_SEARCH_SESSIONS => {
+                    show_main_window(app);
+                    let _ = app.emit("tray:open-search", ());
+                }
                 MENU_OPEN_DASHBOARD => show_main_window(app),
                 MENU_SNOOZE_NOTIFICATIONS => {
                     let _ = app.emit("tray:snooze", ());

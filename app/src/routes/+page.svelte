@@ -3,7 +3,69 @@
 </svelte:head>
 
 <script lang="ts">
+  import { page } from '$app/stores';
   import { connectionState, lastConnectionError } from '$lib/stores/connection';
+  import { sessions, selectedSession, selectSession } from '$lib/stores/sessions';
+  import type { Session } from '$lib/types';
+  import { onDestroy, onMount, tick } from 'svelte';
+
+  let query = '';
+  let searchInput: HTMLInputElement | null = null;
+  let mounted = false;
+
+  const isSubsequence = (needle: string, haystack: string) => {
+    let needleIndex = 0;
+    for (let haystackIndex = 0; haystackIndex < haystack.length; haystackIndex += 1) {
+      if (haystack[haystackIndex] === needle[needleIndex]) {
+        needleIndex += 1;
+        if (needleIndex >= needle.length) {
+          return true;
+        }
+      }
+    }
+    return needle.length === 0;
+  };
+
+  const matchesToken = (session: Session, token: string) => {
+    const haystack = `${session.name} ${session.sessionUid}`.toLowerCase();
+    return haystack.includes(token) || isSubsequence(token, haystack);
+  };
+
+  $: normalizedQuery = query.trim().toLowerCase();
+  $: tokens = normalizedQuery.split(/\s+/).filter(Boolean);
+  $: filteredSessions =
+    tokens.length === 0
+      ? $sessions
+      : $sessions.filter((session) => tokens.every((token) => matchesToken(session, token)));
+
+  $: focusRequested = $page.url.searchParams.get('focusSearch') === '1';
+  $: if (mounted && focusRequested) {
+    void tick().then(() => searchInput?.focus());
+  }
+
+  onMount(() => {
+    mounted = true;
+    const onKeydown = (event: KeyboardEvent) => {
+      if (!(event.key === 'k' || event.key === 'K')) {
+        return;
+      }
+      if (!(event.ctrlKey || event.metaKey)) {
+        return;
+      }
+
+      event.preventDefault();
+      searchInput?.focus();
+    };
+
+    window.addEventListener('keydown', onKeydown);
+    return () => {
+      window.removeEventListener('keydown', onKeydown);
+    };
+  });
+
+  onDestroy(() => {
+    mounted = false;
+  });
 </script>
 
 <main class="min-h-screen bg-slate-950 text-slate-100">
@@ -31,7 +93,7 @@
     <div class="mt-10 grid gap-4 sm:grid-cols-3">
       <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
         <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Sessions</p>
-        <p class="mt-3 text-2xl font-semibold text-white">0 active</p>
+        <p class="mt-3 text-2xl font-semibold text-white">{$sessions.length}</p>
       </div>
       <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
         <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Compacts</p>
@@ -42,5 +104,68 @@
         <p class="mt-3 text-2xl font-semibold text-white">None</p>
       </div>
     </div>
+
+    <section class="mt-12 rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+      <div class="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-semibold text-white">Sessions</h2>
+          <p class="mt-1 text-sm text-slate-300/80">
+            Search by name or session UID. Click a session to focus it.
+          </p>
+        </div>
+        <label class="grid gap-2 text-sm text-slate-200">
+          Search
+          <input
+            class="w-64 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+            placeholder="type to filter... (Ctrl+K)"
+            bind:value={query}
+            bind:this={searchInput}
+          />
+        </label>
+      </div>
+
+      <div class="mt-6 grid gap-3 sm:grid-cols-2">
+        {#if filteredSessions.length === 0}
+          <div class="text-sm text-slate-300/80">No sessions match your search.</div>
+        {:else}
+          {#each filteredSessions as session (session.sessionUid)}
+            <button
+              class="rounded-lg border border-slate-800 bg-slate-950/40 px-4 py-3 text-left hover:bg-slate-950/60"
+              on:click={() => selectSession(session.sessionUid)}
+            >
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="font-semibold text-white">{session.name ?? session.sessionUid}</p>
+                  <p class="mt-1 text-xs text-slate-400">{session.sessionUid}</p>
+                </div>
+                <span class="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-200">
+                  {session.status}
+                </span>
+              </div>
+            </button>
+          {/each}
+        {/if}
+      </div>
+
+      {#if $selectedSession}
+        <div class="mt-6 rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm uppercase tracking-[0.2em] text-slate-400">Selected</p>
+              <p class="mt-2 text-xl font-semibold text-white">
+                {$selectedSession.name ?? $selectedSession.sessionUid}
+              </p>
+              <p class="mt-1 text-xs text-slate-400">{$selectedSession.sessionUid}</p>
+            </div>
+            <button
+              class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm hover:bg-slate-800"
+              on:click={() => selectSession(null)}
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      {/if}
+    </section>
   </div>
 </main>
