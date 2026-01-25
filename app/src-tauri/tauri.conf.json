@@ -26,6 +26,7 @@
   "bundle": {
     "active": true,
     "targets": ["msi"],
+    "icon": ["icons/icon.ico", "icons/icon.png"],
     "windows": {
       "wix": {
         "language": "en-US"

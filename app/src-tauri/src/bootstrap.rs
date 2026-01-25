@@ -21,16 +21,17 @@ pub fn start(app: AppHandle) {
 }
 
 pub fn shutdown(app: &AppHandle) {
-    if let Ok(state) = std::panic::catch_unwind(|| app.state::<AppState>()) {
-        let mut guard = match state.0.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        if let Some(manager) = guard.manager.as_ref() {
-            let _ = manager.stop();
-        }
-        guard.manager = None;
+    let Some(state) = app.try_state::<AppState>() else {
+        return;
+    };
+    let mut guard = match state.0.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    if let Some(manager) = guard.manager.as_ref() {
+        let _ = manager.stop();
     }
+    guard.manager = None;
 }
 
 async fn ensure_daemon(app: &AppHandle) -> bool {

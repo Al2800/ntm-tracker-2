@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, Wry};
 
 const TRAY_ID: &str = "ntm-tracker-tray";
 const MENU_STATUS: &str = "tray_status";
@@ -78,8 +78,8 @@ impl TraySummary {
 
 pub struct TrayState {
     tray: TrayIcon,
-    status_item: MenuItem,
-    sessions_menu: Submenu,
+    status_item: MenuItem<Wry>,
+    sessions_menu: Submenu<Wry>,
     summary: Mutex<TraySummary>,
 }
 

@@ -29,13 +29,13 @@ pub fn start(app: AppHandle) {
                 .and_then(|result| result);
 
         if let Err(err) = result {
-            if let Ok(state) = std::panic::catch_unwind(|| app.state::<AppState>()) {
+            if let Some(state) = app.try_state::<AppState>() {
                 let mut guard = match state.0.lock() {
                     Ok(guard) => guard,
                     Err(poisoned) => poisoned.into_inner(),
                 };
                 guard.last_error = Some(err);
-            }
+            };
         }
 
         bootstrap::start(app);
