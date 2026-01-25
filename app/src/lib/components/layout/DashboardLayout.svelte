@@ -45,7 +45,11 @@
       <!-- Main content area with sidebar -->
       <div class="flex flex-1 overflow-hidden">
         <!-- Sidebar -->
-        <aside class="hidden w-72 shrink-0 flex-col border-r border-border bg-surface-raised/30 lg:flex xl:w-80">
+        <aside
+          class="hidden w-72 shrink-0 flex-col border-r border-border bg-surface-raised/30 lg:flex xl:w-80"
+          role="navigation"
+          aria-label="Sessions navigation"
+        >
           <div class="flex-1 overflow-y-auto">
             <slot name="sidebar" />
           </div>

@@ -53,8 +53,9 @@
   <div class="flex items-center gap-4">
     <button
       type="button"
-      class="flex items-center gap-2 text-text-primary hover:text-accent transition-colors"
+      class="flex items-center gap-2 text-text-primary hover:text-accent transition-colors focus-ring rounded"
       on:click={() => goto('/')}
+      aria-label="Go to NTM Tracker dashboard"
     >
       <span class="label-sm">NTM Tracker</span>
     </button>
@@ -69,6 +70,8 @@
         type="text"
         class="input w-full pl-10 pr-4"
         placeholder="Search sessions… (Ctrl+K)"
+        aria-label="Search sessions"
+        role="searchbox"
       />
       <svg
         class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-subtle"
@@ -125,7 +128,7 @@
     </button>
 
     <!-- Connection status badge -->
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2" role="status" aria-live="polite">
       <span
         class="badge"
         class:badge-success={$connectionState === 'connected'}
@@ -134,6 +137,7 @@
         class:badge-error={$connectionState === 'degraded'}
         class:badge-neutral={$connectionState === 'disconnected'}
         title={$lastConnectionError || undefined}
+        aria-label="Connection status: {connectionLabel[$connectionState] ?? 'Unknown'}"
       >
         {connectionLabel[$connectionState] ?? 'Unknown'}
       </span>
