@@ -1,6 +1,6 @@
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { get } from 'svelte/store';
-import { rpcCall } from '../tauri';
+import { rpcCallWithRetry } from '../tauri';
 import type { DailyStats, HourlyStats, Session, TrackerEvent } from '../types';
 import { appendEvents, lastEventId, resetEvents } from '../stores/events';
 import { setSessions, upsertSession } from '../stores/sessions';
@@ -68,12 +68,12 @@ export const startDaemonSubscription = async (channels = ['sessions', 'events', 
   const sinceEventId = get(lastEventId);
 
   try {
-    await rpcCall('subscribe', { channels, sinceEventId });
+    await rpcCallWithRetry('subscribe', { channels, sinceEventId });
   } catch (error) {
     if (isStaleCursorError(error)) {
       resetEvents();
-      await rpcCall('subscribe', { channels, sinceEventId: 0 });
-      const snapshot = await rpcCall<Record<string, unknown>>('snapshot.get');
+      await rpcCallWithRetry('subscribe', { channels, sinceEventId: 0 });
+      const snapshot = await rpcCallWithRetry<Record<string, unknown>>('snapshot.get');
       applySnapshot(snapshot);
     } else {
       throw error;
