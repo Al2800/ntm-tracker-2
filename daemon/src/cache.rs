@@ -173,6 +173,24 @@ impl Cache {
         }
     }
 
+    /// Get the number of cached sessions.
+    pub fn session_count(&self) -> usize {
+        self.sessions.len()
+    }
+
+    /// Get the number of cached panes.
+    pub fn pane_count(&self) -> usize {
+        self.panes.len()
+    }
+
+    /// Get the number of cached events.
+    pub fn event_count(&self) -> usize {
+        self.recent_events
+            .read()
+            .expect("cache recent_events lock")
+            .len()
+    }
+
     pub fn apply_snapshot(&self, snapshot: CacheSnapshot) {
         self.sessions.clear();
         self.panes.clear();
@@ -204,16 +222,12 @@ impl Cache {
 mod tests {
     use super::*;
 
-    #[test]
-    fn cache_metrics_track_hits() {
-        let cache = Cache::new(10);
-        assert!(cache.get_session("missing").is_none());
-
-        cache.upsert_session(Session {
-            session_uid: "sess-1".to_string(),
+    fn make_session(uid: &str, name: &str) -> Session {
+        Session {
+            session_uid: uid.to_string(),
             source_id: "src".to_string(),
             tmux_session_id: None,
-            name: "alpha".to_string(),
+            name: name.to_string(),
             created_at: 1,
             last_seen_at: 1,
             ended_at: None,
@@ -221,7 +235,34 @@ mod tests {
             status_reason: None,
             pane_count: 0,
             metadata: None,
-        });
+        }
+    }
+
+    fn make_pane(uid: &str, session_uid: &str) -> Pane {
+        Pane {
+            pane_uid: uid.to_string(),
+            session_uid: session_uid.to_string(),
+            pane_index: 0,
+            tmux_pane_id: None,
+            tmux_window_id: None,
+            tmux_pane_pid: None,
+            agent_type: None,
+            created_at: 1,
+            last_seen_at: 1,
+            last_activity_at: Some(1),
+            current_command: None,
+            ended_at: None,
+            status: crate::models::pane::PaneStatus::Active,
+            status_reason: None,
+        }
+    }
+
+    #[test]
+    fn cache_metrics_track_hits() {
+        let cache = Cache::new(10);
+        assert!(cache.get_session("missing").is_none());
+
+        cache.upsert_session(make_session("sess-1", "alpha"));
 
         assert!(cache.get_session("sess-1").is_some());
         let metrics = cache.metrics();
@@ -299,5 +340,255 @@ mod tests {
         assert!(cache.get_session("new").is_some());
         assert_eq!(cache.stats_today().total_compacts, 1);
         assert_eq!(cache.health().status, "ok");
+    }
+
+    #[test]
+    fn pane_metrics_track_hits_and_misses() {
+        let cache = Cache::new(10);
+        assert!(cache.get_pane("missing").is_none());
+
+        cache.upsert_pane(make_pane("pane-1", "sess-1"));
+
+        assert!(cache.get_pane("pane-1").is_some());
+        let metrics = cache.metrics();
+        assert_eq!(metrics.pane_hits, 1);
+        assert_eq!(metrics.pane_misses, 1);
+    }
+
+    #[test]
+    fn all_sessions_returns_all() {
+        let cache = Cache::new(10);
+        cache.upsert_session(make_session("sess-1", "alpha"));
+        cache.upsert_session(make_session("sess-2", "beta"));
+
+        let sessions = cache.all_sessions();
+        assert_eq!(sessions.len(), 2);
+    }
+
+    #[test]
+    fn all_panes_returns_all() {
+        let cache = Cache::new(10);
+        cache.upsert_pane(make_pane("pane-1", "sess-1"));
+        cache.upsert_pane(make_pane("pane-2", "sess-1"));
+
+        let panes = cache.all_panes();
+        assert_eq!(panes.len(), 2);
+    }
+
+    #[test]
+    fn remove_session_works() {
+        let cache = Cache::new(10);
+        cache.upsert_session(make_session("sess-1", "alpha"));
+        assert!(cache.get_session("sess-1").is_some());
+
+        cache.remove_session("sess-1");
+        assert!(cache.get_session("sess-1").is_none());
+    }
+
+    #[test]
+    fn remove_pane_works() {
+        let cache = Cache::new(10);
+        cache.upsert_pane(make_pane("pane-1", "sess-1"));
+        assert!(cache.get_pane("pane-1").is_some());
+
+        cache.remove_pane("pane-1");
+        assert!(cache.get_pane("pane-1").is_none());
+    }
+
+    #[test]
+    fn upsert_session_updates_existing() {
+        let cache = Cache::new(10);
+        let mut session = make_session("sess-1", "alpha");
+        cache.upsert_session(session.clone());
+
+        session.name = "updated".to_string();
+        cache.upsert_session(session);
+
+        let retrieved = cache.get_session("sess-1").unwrap();
+        assert_eq!(retrieved.name, "updated");
+        assert_eq!(cache.session_count(), 1);
+    }
+
+    #[test]
+    fn upsert_pane_updates_existing() {
+        let cache = Cache::new(10);
+        let mut pane = make_pane("pane-1", "sess-1");
+        cache.upsert_pane(pane.clone());
+
+        pane.pane_index = 5;
+        cache.upsert_pane(pane);
+
+        let retrieved = cache.get_pane("pane-1").unwrap();
+        assert_eq!(retrieved.pane_index, 5);
+        assert_eq!(cache.pane_count(), 1);
+    }
+
+    #[test]
+    fn set_and_get_stats_today() {
+        let cache = Cache::new(10);
+        let stats = StatsAggregate {
+            total_compacts: 10,
+            active_minutes: 120,
+            estimated_tokens: 50000,
+        };
+        cache.set_stats_today(stats);
+
+        let retrieved = cache.stats_today();
+        assert_eq!(retrieved.total_compacts, 10);
+        assert_eq!(retrieved.active_minutes, 120);
+        assert_eq!(retrieved.estimated_tokens, 50000);
+    }
+
+    #[test]
+    fn set_and_get_health() {
+        let cache = Cache::new(10);
+        let health = HealthStatus {
+            status: "degraded".to_string(),
+            last_error: Some("connection timeout".to_string()),
+        };
+        cache.set_health(health);
+
+        let retrieved = cache.health();
+        assert_eq!(retrieved.status, "degraded");
+        assert_eq!(retrieved.last_error.as_deref(), Some("connection timeout"));
+    }
+
+    #[test]
+    fn session_count_works() {
+        let cache = Cache::new(10);
+        assert_eq!(cache.session_count(), 0);
+
+        cache.upsert_session(make_session("sess-1", "alpha"));
+        assert_eq!(cache.session_count(), 1);
+
+        cache.upsert_session(make_session("sess-2", "beta"));
+        assert_eq!(cache.session_count(), 2);
+
+        cache.remove_session("sess-1");
+        assert_eq!(cache.session_count(), 1);
+    }
+
+    #[test]
+    fn pane_count_works() {
+        let cache = Cache::new(10);
+        assert_eq!(cache.pane_count(), 0);
+
+        cache.upsert_pane(make_pane("pane-1", "sess-1"));
+        assert_eq!(cache.pane_count(), 1);
+
+        cache.upsert_pane(make_pane("pane-2", "sess-1"));
+        assert_eq!(cache.pane_count(), 2);
+    }
+
+    #[test]
+    fn event_count_works() {
+        let cache = Cache::new(10);
+        assert_eq!(cache.event_count(), 0);
+
+        cache.record_event(EventRecord {
+            event_id: Some(1),
+            session_uid: "sess".to_string(),
+            pane_uid: "pane".to_string(),
+            event_type: "compact".to_string(),
+            detected_at: 1,
+            severity: None,
+            status: None,
+        });
+        assert_eq!(cache.event_count(), 1);
+    }
+
+    #[test]
+    fn snapshot_includes_panes() {
+        let cache = Cache::new(5);
+        cache.upsert_pane(make_pane("old-pane", "sess"));
+
+        let snapshot = CacheSnapshot {
+            sessions: vec![],
+            panes: vec![make_pane("new-pane", "sess")],
+            events: vec![],
+            stats_today: StatsAggregate::default(),
+            health: HealthStatus::default(),
+        };
+
+        cache.apply_snapshot(snapshot);
+        assert!(cache.get_pane("old-pane").is_none());
+        assert!(cache.get_pane("new-pane").is_some());
+    }
+
+    #[test]
+    fn snapshot_caps_events_to_max() {
+        let cache = Cache::new(2);
+
+        let snapshot = CacheSnapshot {
+            sessions: vec![],
+            panes: vec![],
+            events: vec![
+                EventRecord {
+                    event_id: Some(1),
+                    session_uid: "s".to_string(),
+                    pane_uid: "p".to_string(),
+                    event_type: "a".to_string(),
+                    detected_at: 1,
+                    severity: None,
+                    status: None,
+                },
+                EventRecord {
+                    event_id: Some(2),
+                    session_uid: "s".to_string(),
+                    pane_uid: "p".to_string(),
+                    event_type: "b".to_string(),
+                    detected_at: 2,
+                    severity: None,
+                    status: None,
+                },
+                EventRecord {
+                    event_id: Some(3),
+                    session_uid: "s".to_string(),
+                    pane_uid: "p".to_string(),
+                    event_type: "c".to_string(),
+                    detected_at: 3,
+                    severity: None,
+                    status: None,
+                },
+            ],
+            stats_today: StatsAggregate::default(),
+            health: HealthStatus::default(),
+        };
+
+        cache.apply_snapshot(snapshot);
+        let events = cache.recent_events();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].event_id, Some(1));
+        assert_eq!(events[1].event_id, Some(2));
+    }
+
+    #[test]
+    fn max_events_at_least_one() {
+        let cache = Cache::new(0); // Should be clamped to 1
+        cache.record_event(EventRecord {
+            event_id: Some(1),
+            session_uid: "s".to_string(),
+            pane_uid: "p".to_string(),
+            event_type: "a".to_string(),
+            detected_at: 1,
+            severity: None,
+            status: None,
+        });
+        assert_eq!(cache.event_count(), 1);
+    }
+
+    #[test]
+    fn default_stats_aggregate() {
+        let stats = StatsAggregate::default();
+        assert_eq!(stats.total_compacts, 0);
+        assert_eq!(stats.active_minutes, 0);
+        assert_eq!(stats.estimated_tokens, 0);
+    }
+
+    #[test]
+    fn default_health_status() {
+        let health = HealthStatus::default();
+        assert_eq!(health.status, "");
+        assert!(health.last_error.is_none());
     }
 }

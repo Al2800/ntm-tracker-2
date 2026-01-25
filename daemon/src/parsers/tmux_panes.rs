@@ -96,4 +96,89 @@ mod tests {
         assert_eq!(meta.pane_dead, false);
         assert_eq!(meta.pane_in_mode, true);
     }
+
+    #[test]
+    fn parses_multiple_lines() {
+        let input = "$1:@2:%3:0:111:fish:1700000000:0:0\n$1:@2:%4:1:222:vim:1700000001:0:0";
+        let metas = parse_tmux_panes(input).expect("parse");
+        assert_eq!(metas.len(), 2);
+        assert_eq!(metas[0].pane_id, "%3");
+        assert_eq!(metas[1].pane_id, "%4");
+        assert_eq!(metas[1].pane_pid, 222);
+    }
+
+    #[test]
+    fn handles_empty_input() {
+        let metas = parse_tmux_panes("").expect("parse");
+        assert_eq!(metas.len(), 0);
+    }
+
+    #[test]
+    fn handles_whitespace_only() {
+        let metas = parse_tmux_panes("   \n  \n   ").expect("parse");
+        assert_eq!(metas.len(), 0);
+    }
+
+    #[test]
+    fn fails_on_insufficient_fields() {
+        let line = "$1:@2:%3:0:111:fish";
+        let result = parse_tmux_panes(line);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().reason.contains("expected 9 fields"));
+    }
+
+    #[test]
+    fn fails_on_invalid_pane_index() {
+        let line = "$1:@2:%3:abc:111:fish:1700000000:0:0";
+        let result = parse_tmux_panes(line);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().reason.contains("invalid pane_index"));
+    }
+
+    #[test]
+    fn fails_on_invalid_pid() {
+        let line = "$1:@2:%3:0:notapid:fish:1700000000:0:0";
+        let result = parse_tmux_panes(line);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().reason.contains("invalid pane_pid"));
+    }
+
+    #[test]
+    fn fails_on_invalid_timestamp() {
+        let line = "$1:@2:%3:0:111:fish:notanumber:0:0";
+        let result = parse_tmux_panes(line);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().reason.contains("invalid pane_last_activity"));
+    }
+
+    #[test]
+    fn fails_on_invalid_bool() {
+        let line = "$1:@2:%3:0:111:fish:1700000000:2:0";
+        let result = parse_tmux_panes(line);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().reason.contains("invalid pane_dead"));
+    }
+
+    #[test]
+    fn handles_dead_pane() {
+        let line = "$1:@2:%3:0:111:fish:1700000000:1:0";
+        let meta = parse_tmux_panes(line).expect("parse").remove(0);
+        assert_eq!(meta.pane_dead, true);
+        assert_eq!(meta.pane_in_mode, false);
+    }
+
+    #[test]
+    fn handles_large_pane_index() {
+        let line = "$1:@2:%3:99:111:bash:1700000000:0:0";
+        let meta = parse_tmux_panes(line).expect("parse").remove(0);
+        assert_eq!(meta.pane_index, 99);
+    }
+
+    #[test]
+    fn handles_command_with_spaces() {
+        // Note: command field is limited by splitn(9) so spaces after 9th field are included
+        let line = "$1:@2:%3:0:111:some command:1700000000:0:0";
+        let meta = parse_tmux_panes(line).expect("parse").remove(0);
+        assert_eq!(meta.pane_current_command, "some command");
+    }
 }

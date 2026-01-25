@@ -165,4 +165,215 @@ mod tests {
         let result = detect_status(input, StatusConfig::default());
         assert_eq!(result.status, PaneStatus::Ended);
     }
+
+    #[test]
+    fn active_when_thinking_pattern() {
+        let input = StatusInput {
+            now: 100,
+            pane_last_activity: Some(5), // Stale but active pattern
+            pane_dead: false,
+            pane_current_command: Some("claude"),
+            output_line: Some("thinking..."),
+        };
+        let result = detect_status(input, StatusConfig { idle_threshold_secs: 10 });
+        assert_eq!(result.status, PaneStatus::Active);
+        assert_eq!(result.reason, "active_pattern");
+    }
+
+    #[test]
+    fn active_when_processing_pattern() {
+        let input = StatusInput {
+            now: 100,
+            pane_last_activity: Some(5),
+            pane_dead: false,
+            pane_current_command: Some("claude"),
+            output_line: Some("Processing your request..."),
+        };
+        let result = detect_status(input, StatusConfig { idle_threshold_secs: 10 });
+        assert_eq!(result.status, PaneStatus::Active);
+        assert_eq!(result.reason, "active_pattern");
+    }
+
+    #[test]
+    fn active_when_reading_file_pattern() {
+        let input = StatusInput {
+            now: 100,
+            pane_last_activity: Some(5),
+            pane_dead: false,
+            pane_current_command: Some("claude"),
+            output_line: Some("Reading file contents..."),
+        };
+        let result = detect_status(input, StatusConfig { idle_threshold_secs: 10 });
+        assert_eq!(result.status, PaneStatus::Active);
+        assert_eq!(result.reason, "active_pattern");
+    }
+
+    #[test]
+    fn active_when_executing_pattern() {
+        let input = StatusInput {
+            now: 100,
+            pane_last_activity: Some(5),
+            pane_dead: false,
+            pane_current_command: Some("claude"),
+            output_line: Some("Executing command..."),
+        };
+        let result = detect_status(input, StatusConfig { idle_threshold_secs: 10 });
+        assert_eq!(result.status, PaneStatus::Active);
+        assert_eq!(result.reason, "active_pattern");
+    }
+
+    #[test]
+    fn waiting_when_prompt_ends_with_chevron() {
+        let input = StatusInput {
+            now: 100,
+            pane_last_activity: Some(99),
+            pane_dead: false,
+            pane_current_command: Some("bash"),
+            output_line: Some("Enter your choice >"),
+        };
+        let result = detect_status(input, StatusConfig { idle_threshold_secs: 10 });
+        assert_eq!(result.status, PaneStatus::Waiting);
+    }
+
+    #[test]
+    fn waiting_when_press_enter_pattern() {
+        let input = StatusInput {
+            now: 100,
+            pane_last_activity: Some(99),
+            pane_dead: false,
+            pane_current_command: Some("bash"),
+            output_line: Some("Press enter to continue"),
+        };
+        let result = detect_status(input, StatusConfig { idle_threshold_secs: 10 });
+        assert_eq!(result.status, PaneStatus::Waiting);
+    }
+
+    #[test]
+    fn active_with_recent_activity() {
+        let input = StatusInput {
+            now: 100,
+            pane_last_activity: Some(99),
+            pane_dead: false,
+            pane_current_command: Some("vim"),
+            output_line: None,
+        };
+        let result = detect_status(input, StatusConfig { idle_threshold_secs: 10 });
+        assert_eq!(result.status, PaneStatus::Active);
+        assert!(result.reason.starts_with("recent_activity:"));
+    }
+
+    #[test]
+    fn includes_command_in_active_reason() {
+        let input = StatusInput {
+            now: 100,
+            pane_last_activity: Some(99),
+            pane_dead: false,
+            pane_current_command: Some("python"),
+            output_line: None,
+        };
+        let result = detect_status(input, StatusConfig { idle_threshold_secs: 10 });
+        assert_eq!(result.reason, "recent_activity:python");
+    }
+
+    #[test]
+    fn strips_ansi_codes_for_pattern_matching() {
+        let input = StatusInput {
+            now: 100,
+            pane_last_activity: Some(99),
+            pane_dead: false,
+            pane_current_command: Some("claude"),
+            output_line: Some("\x1b[32mthinking...\x1b[0m"),
+        };
+        let result = detect_status(input, StatusConfig { idle_threshold_secs: 10 });
+        assert_eq!(result.status, PaneStatus::Active);
+        assert_eq!(result.reason, "active_pattern");
+    }
+
+    #[test]
+    fn ended_takes_priority_over_everything() {
+        let input = StatusInput {
+            now: 100,
+            pane_last_activity: Some(99),
+            pane_dead: true,
+            pane_current_command: Some("bash"),
+            output_line: Some("thinking..."), // Active pattern but dead
+        };
+        let result = detect_status(input, StatusConfig { idle_threshold_secs: 10 });
+        assert_eq!(result.status, PaneStatus::Ended);
+        assert_eq!(result.reason, "pane_dead");
+    }
+
+    #[test]
+    fn waiting_requires_recent_activity() {
+        let input = StatusInput {
+            now: 100,
+            pane_last_activity: Some(50), // Not recent
+            pane_dead: false,
+            pane_current_command: Some("bash"),
+            output_line: Some("Waiting for input (y/n)"),
+        };
+        let result = detect_status(input, StatusConfig { idle_threshold_secs: 10 });
+        // Waiting pattern but stale activity - should fall through
+        assert_eq!(result.status, PaneStatus::Idle);
+    }
+
+    #[test]
+    fn idle_when_no_activity_timestamp() {
+        let input = StatusInput {
+            now: 100,
+            pane_last_activity: None,
+            pane_dead: false,
+            pane_current_command: Some("bash"),
+            output_line: None,
+        };
+        let result = detect_status(input, StatusConfig { idle_threshold_secs: 10 });
+        assert_eq!(result.status, PaneStatus::Idle);
+        assert_eq!(result.reason, "idle_timeout");
+    }
+
+    #[test]
+    fn unknown_command_defaults_to_unknown() {
+        let input = StatusInput {
+            now: 100,
+            pane_last_activity: Some(99),
+            pane_dead: false,
+            pane_current_command: None,
+            output_line: None,
+        };
+        let result = detect_status(input, StatusConfig { idle_threshold_secs: 10 });
+        assert_eq!(result.status, PaneStatus::Active);
+        assert_eq!(result.reason, "recent_activity:unknown");
+    }
+
+    #[test]
+    fn default_config_idle_threshold() {
+        let config = StatusConfig::default();
+        assert_eq!(config.idle_threshold_secs, 300);
+    }
+
+    #[test]
+    fn case_insensitive_active_patterns() {
+        let input = StatusInput {
+            now: 100,
+            pane_last_activity: Some(5),
+            pane_dead: false,
+            pane_current_command: Some("claude"),
+            output_line: Some("THINKING... please wait"),
+        };
+        let result = detect_status(input, StatusConfig { idle_threshold_secs: 10 });
+        assert_eq!(result.status, PaneStatus::Active);
+    }
+
+    #[test]
+    fn case_insensitive_waiting_patterns() {
+        let input = StatusInput {
+            now: 100,
+            pane_last_activity: Some(99),
+            pane_dead: false,
+            pane_current_command: Some("bash"),
+            output_line: Some("WAITING FOR INPUT"),
+        };
+        let result = detect_status(input, StatusConfig { idle_threshold_secs: 10 });
+        assert_eq!(result.status, PaneStatus::Waiting);
+    }
 }

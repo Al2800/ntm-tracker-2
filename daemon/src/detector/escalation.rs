@@ -222,4 +222,279 @@ mod tests {
         let resolved = detector.resolve_on_activity("pane-2", 120).expect("resolved");
         assert_eq!(resolved.status, EscalationStatus::Resolved);
     }
+
+    #[test]
+    fn detects_fatal_error() {
+        let mut detector = EscalationDetector::default();
+        let input = EscalationInput {
+            now: 100,
+            pane_uid: "pane-1",
+            line: "FATAL ERROR: cannot continue",
+            pane_last_activity: Some(99),
+            waiting_hint: true,
+        };
+        let event = detector.detect(input).expect("detect");
+        assert_eq!(event.severity, "error");
+        assert!(event.confidence >= 0.9);
+    }
+
+    #[test]
+    fn detects_cannot_proceed() {
+        let mut detector = EscalationDetector::default();
+        let input = EscalationInput {
+            now: 100,
+            pane_uid: "pane-1",
+            line: "cannot proceed without authorization",
+            pane_last_activity: Some(99),
+            waiting_hint: true,
+        };
+        let event = detector.detect(input).expect("detect");
+        assert_eq!(event.severity, "error");
+    }
+
+    #[test]
+    fn detects_permission_denied_continue() {
+        let mut detector = EscalationDetector::default();
+        let input = EscalationInput {
+            now: 100,
+            pane_uid: "pane-1",
+            line: "Permission denied. Press enter to continue or abort.",
+            pane_last_activity: Some(99),
+            waiting_hint: true,
+        };
+        let event = detector.detect(input).expect("detect");
+        assert_eq!(event.severity, "error");
+    }
+
+    #[test]
+    fn detects_manual_intervention() {
+        let mut detector = EscalationDetector::default();
+        let input = EscalationInput {
+            now: 100,
+            pane_uid: "pane-1",
+            line: "This requires manual intervention from the user",
+            pane_last_activity: Some(99),
+            waiting_hint: true,
+        };
+        let event = detector.detect(input).expect("detect");
+        assert_eq!(event.severity, "warn");
+    }
+
+    #[test]
+    fn detects_escalating_to_user() {
+        let mut detector = EscalationDetector::default();
+        let input = EscalationInput {
+            now: 100,
+            pane_uid: "pane-1",
+            line: "Escalating to user for decision",
+            pane_last_activity: Some(99),
+            waiting_hint: true,
+        };
+        let event = detector.detect(input).expect("detect");
+        assert_eq!(event.severity, "warn");
+    }
+
+    #[test]
+    fn detects_confirm_remove() {
+        let mut detector = EscalationDetector::default();
+        let input = EscalationInput {
+            now: 100,
+            pane_uid: "pane-1",
+            line: "please confirm remove operation >",
+            pane_last_activity: Some(99),
+            waiting_hint: true,
+        };
+        let event = detector.detect(input).expect("detect");
+        assert_eq!(event.severity, "warn");
+        assert!(event.confidence >= 0.8);
+    }
+
+    #[test]
+    fn detects_confirm_overwrite() {
+        let mut detector = EscalationDetector::default();
+        let input = EscalationInput {
+            now: 100,
+            pane_uid: "pane-1",
+            line: "please confirm overwrite $",
+            pane_last_activity: Some(99),
+            waiting_hint: true,
+        };
+        let event = detector.detect(input).expect("detect");
+        assert_eq!(event.severity, "warn");
+    }
+
+    #[test]
+    fn ignores_stale_activity() {
+        let config = EscalationConfig {
+            debounce_secs: 30,
+            activity_window_secs: 60,
+        };
+        let mut detector = EscalationDetector::new(config);
+        // Last activity was too long ago
+        let input = EscalationInput {
+            now: 200,
+            pane_uid: "pane-1",
+            line: "fatal error",
+            pane_last_activity: Some(100), // 100 seconds ago, outside 60s window
+            waiting_hint: true,
+        };
+        assert!(detector.detect(input).is_none());
+    }
+
+    #[test]
+    fn ignores_non_prompt_without_waiting_hint() {
+        let mut detector = EscalationDetector::default();
+        // Line doesn't look like a prompt and waiting_hint is false
+        let input = EscalationInput {
+            now: 100,
+            pane_uid: "pane-1",
+            line: "fatal error occurred during processing",
+            pane_last_activity: Some(99),
+            waiting_hint: false,
+        };
+        assert!(detector.detect(input).is_none());
+    }
+
+    #[test]
+    fn detects_prompt_ending_with_chevron() {
+        let mut detector = EscalationDetector::default();
+        let input = EscalationInput {
+            now: 100,
+            pane_uid: "pane-1",
+            line: "fatal error - what do you want to do >",
+            pane_last_activity: Some(99),
+            waiting_hint: false, // No hint but line ends with >
+        };
+        let event = detector.detect(input).expect("detect");
+        assert_eq!(event.severity, "error");
+    }
+
+    #[test]
+    fn detects_prompt_ending_with_dollar() {
+        let mut detector = EscalationDetector::default();
+        let input = EscalationInput {
+            now: 100,
+            pane_uid: "pane-1",
+            line: "need human input here $",
+            pane_last_activity: Some(99),
+            waiting_hint: false,
+        };
+        let event = detector.detect(input).expect("detect");
+        assert_eq!(event.severity, "warn");
+    }
+
+    #[test]
+    fn detects_y_n_prompt() {
+        let mut detector = EscalationDetector::default();
+        let input = EscalationInput {
+            now: 100,
+            pane_uid: "pane-1",
+            line: "Are you sure you want to proceed? (Y/N)",
+            pane_last_activity: Some(99),
+            waiting_hint: false,
+        };
+        // This should match because of (y/n) pattern in looks_like_prompt
+        // But it needs an escalation pattern too
+        // Without escalation pattern, it won't detect
+        let result = detector.detect(input);
+        // This line has (Y/N) which looks_like_prompt but no escalation keywords
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn dismiss_removes_active_escalation() {
+        let mut detector = EscalationDetector::default();
+        let input = EscalationInput {
+            now: 100,
+            pane_uid: "pane-3",
+            line: "fatal error",
+            pane_last_activity: Some(99),
+            waiting_hint: true,
+        };
+        assert!(detector.detect(input).is_some());
+        assert!(detector.active_for_pane("pane-3").is_some());
+
+        let dismissed = detector.dismiss("pane-3").expect("dismissed");
+        assert_eq!(dismissed.status, EscalationStatus::Dismissed);
+        assert!(detector.active_for_pane("pane-3").is_none());
+    }
+
+    #[test]
+    fn dismiss_returns_none_for_unknown_pane() {
+        let mut detector = EscalationDetector::default();
+        assert!(detector.dismiss("unknown-pane").is_none());
+    }
+
+    #[test]
+    fn resolve_outside_window_keeps_active() {
+        let config = EscalationConfig {
+            debounce_secs: 30,
+            activity_window_secs: 60,
+        };
+        let mut detector = EscalationDetector::new(config);
+        let input = EscalationInput {
+            now: 100,
+            pane_uid: "pane-4",
+            line: "fatal error",
+            pane_last_activity: Some(99),
+            waiting_hint: true,
+        };
+        assert!(detector.detect(input).is_some());
+
+        // Try to resolve outside the activity window
+        let result = detector.resolve_on_activity("pane-4", 500);
+        assert!(result.is_none());
+        // Escalation should still be active
+        assert!(detector.active_for_pane("pane-4").is_some());
+    }
+
+    #[test]
+    fn active_for_pane_returns_none_for_unknown() {
+        let detector = EscalationDetector::default();
+        assert!(detector.active_for_pane("unknown").is_none());
+    }
+
+    #[test]
+    fn multiple_panes_tracked_independently() {
+        let mut detector = EscalationDetector::default();
+
+        let input1 = EscalationInput {
+            now: 100,
+            pane_uid: "pane-a",
+            line: "fatal error",
+            pane_last_activity: Some(99),
+            waiting_hint: true,
+        };
+        assert!(detector.detect(input1).is_some());
+
+        let input2 = EscalationInput {
+            now: 150, // After debounce for different pane
+            pane_uid: "pane-b",
+            line: "cannot proceed",
+            pane_last_activity: Some(149),
+            waiting_hint: true,
+        };
+        assert!(detector.detect(input2).is_some());
+
+        assert!(detector.active_for_pane("pane-a").is_some());
+        assert!(detector.active_for_pane("pane-b").is_some());
+
+        // Resolve pane-a
+        assert!(detector.resolve_on_activity("pane-a", 150).is_some());
+        assert!(detector.active_for_pane("pane-a").is_none());
+        assert!(detector.active_for_pane("pane-b").is_some());
+    }
+
+    #[test]
+    fn requires_recent_activity() {
+        let mut detector = EscalationDetector::default();
+        let input = EscalationInput {
+            now: 100,
+            pane_uid: "pane-1",
+            line: "fatal error",
+            pane_last_activity: None, // No activity timestamp
+            waiting_hint: true,
+        };
+        assert!(detector.detect(input).is_none());
+    }
 }

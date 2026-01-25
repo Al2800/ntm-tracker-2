@@ -114,4 +114,151 @@ mod tests {
         assert_eq!(pane.status, PaneStatus::Ended);
         assert_eq!(pane.status_reason.as_deref(), Some("ended"));
     }
+
+    #[test]
+    fn session_transitions_to_active_with_recent_activity() {
+        let config = StateConfig {
+            idle_threshold_secs: 10,
+        };
+        let mut session = Session::new("source", "name", None, 0);
+        session.last_seen_at = 95;
+        let changed = update_session_status(&mut session, 100, config);
+        assert!(changed);
+        assert_eq!(session.status, SessionStatus::Active);
+        assert_eq!(session.status_reason.as_deref(), Some("recent_activity"));
+    }
+
+    #[test]
+    fn session_ended_takes_priority() {
+        let config = StateConfig {
+            idle_threshold_secs: 10,
+        };
+        let mut session = Session::new("source", "name", None, 0);
+        session.last_seen_at = 99; // Recent activity
+        session.ended_at = Some(100);
+        let changed = update_session_status(&mut session, 100, config);
+        assert!(changed);
+        assert_eq!(session.status, SessionStatus::Ended);
+        assert_eq!(session.status_reason.as_deref(), Some("ended"));
+    }
+
+    #[test]
+    fn session_no_change_returns_false() {
+        let config = StateConfig {
+            idle_threshold_secs: 10,
+        };
+        let mut session = Session::new("source", "name", None, 0);
+        session.last_seen_at = 95;
+        session.status = SessionStatus::Active;
+        session.status_reason = Some("recent_activity".to_string());
+        let changed = update_session_status(&mut session, 100, config);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn pane_active_with_recent_activity() {
+        let config = StateConfig {
+            idle_threshold_secs: 10,
+        };
+        let mut pane = Pane::new("sess", 0, 0, None, None, None);
+        pane.last_activity_at = Some(95);
+        let changed = update_pane_status(&mut pane, 100, config, false);
+        assert!(changed);
+        assert_eq!(pane.status, PaneStatus::Active);
+        assert_eq!(pane.status_reason.as_deref(), Some("recent_activity"));
+    }
+
+    #[test]
+    fn pane_idle_without_recent_activity() {
+        let config = StateConfig {
+            idle_threshold_secs: 10,
+        };
+        let mut pane = Pane::new("sess", 0, 0, None, None, None);
+        pane.last_activity_at = Some(50);
+        let changed = update_pane_status(&mut pane, 100, config, false);
+        assert!(changed);
+        assert_eq!(pane.status, PaneStatus::Idle);
+        assert_eq!(pane.status_reason.as_deref(), Some("idle_timeout"));
+    }
+
+    #[test]
+    fn pane_idle_without_activity_timestamp() {
+        let config = StateConfig {
+            idle_threshold_secs: 10,
+        };
+        let mut pane = Pane::new("sess", 0, 0, None, None, None);
+        pane.last_activity_at = None;
+        let changed = update_pane_status(&mut pane, 100, config, false);
+        assert!(changed);
+        assert_eq!(pane.status, PaneStatus::Idle);
+    }
+
+    #[test]
+    fn pane_ended_takes_priority_over_waiting() {
+        let config = StateConfig {
+            idle_threshold_secs: 10,
+        };
+        let mut pane = Pane::new("sess", 0, 0, None, None, None);
+        pane.last_activity_at = Some(99);
+        pane.ended_at = Some(100);
+        let changed = update_pane_status(&mut pane, 100, config, true); // waiting=true
+        assert!(changed);
+        assert_eq!(pane.status, PaneStatus::Ended);
+        assert_eq!(pane.status_reason.as_deref(), Some("ended"));
+    }
+
+    #[test]
+    fn pane_no_change_returns_false() {
+        let config = StateConfig {
+            idle_threshold_secs: 10,
+        };
+        let mut pane = Pane::new("sess", 0, 0, None, None, None);
+        pane.last_activity_at = Some(99);
+        pane.status = PaneStatus::Active;
+        pane.status_reason = Some("recent_activity".to_string());
+        let changed = update_pane_status(&mut pane, 100, config, false);
+        assert!(!changed);
+    }
+
+    #[test]
+    fn default_config() {
+        let config = StateConfig::default();
+        assert_eq!(config.idle_threshold_secs, 300);
+    }
+
+    #[test]
+    fn session_exactly_at_threshold_is_active() {
+        let config = StateConfig {
+            idle_threshold_secs: 10,
+        };
+        let mut session = Session::new("source", "name", None, 0);
+        session.last_seen_at = 90;
+        let changed = update_session_status(&mut session, 100, config);
+        assert!(changed);
+        assert_eq!(session.status, SessionStatus::Active);
+    }
+
+    #[test]
+    fn session_one_past_threshold_is_idle() {
+        let config = StateConfig {
+            idle_threshold_secs: 10,
+        };
+        let mut session = Session::new("source", "name", None, 0);
+        session.last_seen_at = 89;
+        let changed = update_session_status(&mut session, 100, config);
+        assert!(changed);
+        assert_eq!(session.status, SessionStatus::Idle);
+    }
+
+    #[test]
+    fn pane_exactly_at_threshold_is_active() {
+        let config = StateConfig {
+            idle_threshold_secs: 10,
+        };
+        let mut pane = Pane::new("sess", 0, 0, None, None, None);
+        pane.last_activity_at = Some(90);
+        let changed = update_pane_status(&mut pane, 100, config, false);
+        assert!(changed);
+        assert_eq!(pane.status, PaneStatus::Active);
+    }
 }

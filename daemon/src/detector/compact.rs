@@ -254,4 +254,238 @@ mod tests {
         let result = detector.detect(input).expect("detect");
         assert_eq!(result.reason, "context_drop");
     }
+
+    #[test]
+    fn detects_conversation_compacted() {
+        let mut detector = CompactDetector::default();
+        let input = CompactInput {
+            now: 100,
+            line: "Conversation compacted to fit context window",
+            ntm_compact_count: None,
+            context_tokens: None,
+            previous_tokens: None,
+        };
+        let result = detector.detect(input).expect("detect");
+        assert_eq!(result.reason, "conversation_compacted");
+        assert!(result.confidence >= 1.0);
+    }
+
+    #[test]
+    fn detects_fresh_context() {
+        let mut detector = CompactDetector::default();
+        let input = CompactInput {
+            now: 100,
+            line: "Starting fresh context after limit exceeded",
+            ntm_compact_count: None,
+            context_tokens: None,
+            previous_tokens: None,
+        };
+        let result = detector.detect(input).expect("detect");
+        assert_eq!(result.reason, "fresh_context");
+    }
+
+    #[test]
+    fn detects_context_reset() {
+        let mut detector = CompactDetector::default();
+        let input = CompactInput {
+            now: 100,
+            line: "Context has been reset for this session",
+            ntm_compact_count: None,
+            context_tokens: None,
+            previous_tokens: None,
+        };
+        let result = detector.detect(input).expect("detect");
+        assert_eq!(result.reason, "context_reset");
+    }
+
+    #[test]
+    fn detects_compacting_without_false_positives() {
+        let mut detector = CompactDetector::default();
+        let input = CompactInput {
+            now: 100,
+            line: "Compacting the data now",
+            ntm_compact_count: None,
+            context_tokens: None,
+            previous_tokens: None,
+        };
+        let result = detector.detect(input).expect("detect");
+        assert_eq!(result.reason, "compacting");
+    }
+
+    #[test]
+    fn ignores_approaching_compacting() {
+        let mut detector = CompactDetector::default();
+        // "approaching compacting soon" should not trigger hard match
+        let input = CompactInput {
+            now: 100,
+            line: "approaching compacting soon",
+            ntm_compact_count: None,
+            context_tokens: None,
+            previous_tokens: None,
+        };
+        let result = detector.detect(input);
+        // Should be None or low confidence warning, not hard match
+        assert!(result.is_none() || result.as_ref().unwrap().confidence < 1.0);
+    }
+
+    #[test]
+    fn detects_warning_approaching_limit() {
+        let mut detector = CompactDetector::default();
+        let input = CompactInput {
+            now: 100,
+            line: "Warning: approaching context limit",
+            ntm_compact_count: None,
+            context_tokens: None,
+            previous_tokens: None,
+        };
+        let result = detector.detect(input).expect("detect");
+        assert_eq!(result.reason, "approaching_limit");
+        assert!(result.confidence < 1.0); // Should be warning level
+    }
+
+    #[test]
+    fn detects_context_near_limit() {
+        let mut detector = CompactDetector::default();
+        let input = CompactInput {
+            now: 100,
+            line: "context is near the limit",
+            ntm_compact_count: None,
+            context_tokens: None,
+            previous_tokens: None,
+        };
+        let result = detector.detect(input).expect("detect");
+        assert_eq!(result.reason, "context_near_limit");
+    }
+
+    #[test]
+    fn strips_ansi_codes_before_matching() {
+        let mut detector = CompactDetector::default();
+        // Input with ANSI escape codes
+        let input = CompactInput {
+            now: 100,
+            line: "\x1b[31mAuto-compacting conversation\x1b[0m",
+            ntm_compact_count: None,
+            context_tokens: None,
+            previous_tokens: None,
+        };
+        let result = detector.detect(input).expect("detect");
+        assert_eq!(result.reason, "auto_compacting");
+    }
+
+    #[test]
+    fn counter_increase_after_initial() {
+        let mut detector = CompactDetector::default();
+        // First detection with counter 1
+        let input1 = CompactInput {
+            now: 100,
+            line: "",
+            ntm_compact_count: Some(1),
+            context_tokens: None,
+            previous_tokens: None,
+        };
+        assert!(detector.detect(input1).is_some());
+
+        // After debounce, same counter shouldn't trigger again
+        let input2 = CompactInput {
+            now: 200,
+            line: "",
+            ntm_compact_count: Some(1),
+            context_tokens: None,
+            previous_tokens: None,
+        };
+        assert!(detector.detect(input2).is_none());
+
+        // But increased counter should trigger
+        let input3 = CompactInput {
+            now: 300,
+            line: "",
+            ntm_compact_count: Some(2),
+            context_tokens: None,
+            previous_tokens: None,
+        };
+        assert!(detector.detect(input3).is_some());
+    }
+
+    #[test]
+    fn context_drop_needs_minimum_tokens() {
+        let mut detector = CompactDetector::default();
+        // Previous tokens below threshold shouldn't trigger
+        let input = CompactInput {
+            now: 100,
+            line: "",
+            ntm_compact_count: None,
+            context_tokens: Some(1000),
+            previous_tokens: Some(5000), // Below 20_000 threshold
+        };
+        assert!(detector.detect(input).is_none());
+    }
+
+    #[test]
+    fn context_drop_needs_ratio() {
+        let mut detector = CompactDetector::default();
+        // Small drop shouldn't trigger
+        let input = CompactInput {
+            now: 100,
+            line: "",
+            ntm_compact_count: None,
+            context_tokens: Some(45000),
+            previous_tokens: Some(50000), // Only 10% drop
+        };
+        assert!(detector.detect(input).is_none());
+    }
+
+    #[test]
+    fn allows_detection_after_debounce_window() {
+        let config = CompactConfig {
+            debounce_secs: 60,
+            ..Default::default()
+        };
+        let mut detector = CompactDetector::new(config);
+
+        let input1 = CompactInput {
+            now: 100,
+            line: "Context limit reached",
+            ntm_compact_count: None,
+            context_tokens: None,
+            previous_tokens: None,
+        };
+        assert!(detector.detect(input1).is_some());
+
+        // After debounce window passes
+        let input2 = CompactInput {
+            now: 170, // 70 seconds later, past 60s debounce
+            line: "Context limit reached again",
+            ntm_compact_count: None,
+            context_tokens: None,
+            previous_tokens: None,
+        };
+        assert!(detector.detect(input2).is_some());
+    }
+
+    #[test]
+    fn no_detection_for_empty_line() {
+        let mut detector = CompactDetector::default();
+        let input = CompactInput {
+            now: 100,
+            line: "",
+            ntm_compact_count: None,
+            context_tokens: None,
+            previous_tokens: None,
+        };
+        assert!(detector.detect(input).is_none());
+    }
+
+    #[test]
+    fn case_insensitive_matching() {
+        let mut detector = CompactDetector::default();
+        let input = CompactInput {
+            now: 100,
+            line: "AUTO-COMPACTING CONVERSATION NOW",
+            ntm_compact_count: None,
+            context_tokens: None,
+            previous_tokens: None,
+        };
+        let result = detector.detect(input).expect("detect");
+        assert_eq!(result.reason, "auto_compacting");
+    }
 }
