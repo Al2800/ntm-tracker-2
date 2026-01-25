@@ -100,12 +100,40 @@ impl Default for PrivacyConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
+pub struct LoggingConfig {
+    /// Log level: trace, debug, info, warn, error
+    pub level: String,
+    /// Log file path (optional, logs to file if set)
+    pub file: Option<PathBuf>,
+    /// Max log file size in MB before rotation
+    pub max_file_mb: u64,
+    /// Max number of rotated log files to keep
+    pub max_files: usize,
+    /// Output format: "json" or "text"
+    pub format: String,
+}
+
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        Self {
+            level: "info".to_string(),
+            file: None,
+            max_file_mb: 10,
+            max_files: 5,
+            format: "text".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct DaemonConfig {
     pub server: ServerConfig,
     pub polling: PollingConfig,
     pub capture: CaptureConfig,
     pub security: SecurityConfig,
     pub privacy: PrivacyConfig,
+    pub logging: LoggingConfig,
 }
 
 impl Default for DaemonConfig {
@@ -116,6 +144,7 @@ impl Default for DaemonConfig {
             capture: CaptureConfig::default(),
             security: SecurityConfig::default(),
             privacy: PrivacyConfig::default(),
+            logging: LoggingConfig::default(),
         }
     }
 }
@@ -157,6 +186,39 @@ impl DaemonConfig {
                 self.security.admin_token_path = Some(PathBuf::from(trimmed));
             }
         }
+
+        if let Ok(level) = env::var("NTM_TRACKER_LOG_LEVEL") {
+            let trimmed = level.trim();
+            if !trimmed.is_empty() {
+                self.logging.level = trimmed.to_string();
+            }
+        }
+
+        if let Ok(format) = env::var("NTM_TRACKER_LOG_FORMAT") {
+            let trimmed = format.trim();
+            if !trimmed.is_empty() {
+                self.logging.format = trimmed.to_string();
+            }
+        }
+
+        if let Ok(path) = env::var("NTM_TRACKER_LOG_FILE") {
+            let trimmed = path.trim();
+            if !trimmed.is_empty() {
+                self.logging.file = Some(PathBuf::from(trimmed));
+            }
+        }
+
+        if let Ok(max_mb) = env::var("NTM_TRACKER_LOG_MAX_FILE_MB") {
+            if let Ok(parsed) = max_mb.trim().parse::<u64>() {
+                self.logging.max_file_mb = parsed;
+            }
+        }
+
+        if let Ok(max_files) = env::var("NTM_TRACKER_LOG_MAX_FILES") {
+            if let Ok(parsed) = max_files.trim().parse::<usize>() {
+                self.logging.max_files = parsed;
+            }
+        }
     }
 
     pub fn validate(&self) -> Result<(), ConfigError> {
@@ -179,6 +241,16 @@ impl DaemonConfig {
 
         if let Some(path) = &self.security.admin_token_path {
             validate_token_file_permissions(path)?;
+        }
+
+        if self.logging.max_files == 0 {
+            return Err(ConfigError::new("logging.max-files must be >= 1"));
+        }
+
+        if self.logging.format != "text" && self.logging.format != "json" {
+            return Err(ConfigError::new(
+                "logging.format must be either 'text' or 'json'",
+            ));
         }
 
         Ok(())
@@ -215,7 +287,7 @@ impl ConfigManager {
     pub fn current(&self) -> DaemonConfig {
         self.config
             .read()
-            .unwrap_or_else(|_| panic!("Config lock poisoned"))
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone()
     }
 
@@ -232,10 +304,11 @@ impl ConfigManager {
         config.apply_env_overrides();
         config.validate()?;
 
-        *self
+        let mut guard = self
             .config
             .write()
-            .unwrap_or_else(|_| panic!("Config lock poisoned")) = config.clone();
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *guard = config.clone();
 
         Ok(config)
     }

@@ -19,6 +19,7 @@ daemon/target/
 .beads/.local_version
 .beads/daemon.log
 .beads/daemon-error
+.beads/*.pid
 
 # local build outputs
 a.out

@@ -1,3 +1,4 @@
+use crate::metrics::METRICS;
 use std::collections::HashMap;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
@@ -176,6 +177,7 @@ impl CommandRunner {
         match output {
             Ok(Ok((stdout, stderr, status))) => {
                 let duration = start.elapsed();
+                record_metrics(spec.category, duration);
                 if status.success() {
                     self.breaker.record_success(spec.category).await;
                     Ok(CommandOutput {
@@ -191,11 +193,13 @@ impl CommandRunner {
                 }
             }
             Ok(Err(err)) => {
+                record_metrics(spec.category, start.elapsed());
                 self.breaker.record_failure(spec.category).await?;
                 Err(err)
             }
             Err(_) => {
                 let _ = child.kill().await;
+                record_metrics(spec.category, start.elapsed());
                 self.breaker.record_failure(spec.category).await?;
                 Err(CommandError::Timeout)
             }
@@ -213,6 +217,13 @@ impl CommandRunner {
                 CommandCategory::NtmTail => self.config.ntm_tail_timeout,
             };
         }
+    }
+}
+
+fn record_metrics(category: CommandCategory, duration: Duration) {
+    match category {
+        CommandCategory::TmuxFast => METRICS.tmux_cmd.record(duration),
+        CommandCategory::NtmStatus | CommandCategory::NtmTail => METRICS.ntm_cmd.record(duration),
     }
 }
 

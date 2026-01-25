@@ -1,5 +1,6 @@
 use crate::bus::{EventBus, StateChange};
 use crate::cache::{Cache, HealthStatus};
+use crate::metrics::{Timer, METRICS};
 use crate::ntm::{NtmClient, NtmError};
 use crate::reconcile::reconcile_ntm_markdown;
 use std::collections::HashMap;
@@ -59,6 +60,7 @@ impl NtmCollector {
     }
 
     pub async fn poll_once(&mut self) -> Result<NtmPollResult, String> {
+        let _timer = Timer::new(&METRICS.poll_cycle);
         let now = current_unix_ts();
         let fallback_interval = self.next_interval(now);
 

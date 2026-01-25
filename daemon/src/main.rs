@@ -1,52 +1,216 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use ntm_tracker_daemon::cache::Cache;
+use ntm_tracker_daemon::cli::{self, OutputFormat, DEFAULT_PORT};
 use ntm_tracker_daemon::config::ConfigManager;
+use ntm_tracker_daemon::logging;
 use ntm_tracker_daemon::rpc::RpcContext;
+use ntm_tracker_daemon::service::{InstanceGuard, ShutdownHandler};
 use ntm_tracker_daemon::transport;
 use std::sync::Arc;
-use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Parser)]
 #[command(name = "ntm-tracker-daemon", version, about = "NTM Tracker daemon")]
 struct Args {
+    /// Output in JSON format.
+    #[arg(long, global = true)]
+    json: bool,
+
+    /// Increase verbosity.
+    #[arg(short, long, global = true)]
+    verbose: bool,
+
     /// Optional config file override (TOML).
-    #[arg(long)]
+    #[arg(long, global = true)]
     config: Option<std::path::PathBuf>,
 
-    /// Log level (trace, debug, info, warn, error).
-    #[arg(long, default_value = "info")]
-    log_level: String,
+    /// Port to connect to for client commands.
+    #[arg(long, global = true, default_value_t = DEFAULT_PORT)]
+    port: u16,
 
-    /// Use stdio transport (newline-delimited JSON-RPC over stdin/stdout).
-    #[arg(long)]
-    stdio: bool,
+    /// Admin token for privileged operations.
+    #[arg(long, global = true)]
+    admin_token: Option<String>,
 
-    /// Start WebSocket server on specified port.
-    #[arg(long)]
-    ws_port: Option<u16>,
+    #[command(subcommand)]
+    command: Option<Command>,
+}
 
-    /// Start HTTP server on specified port.
-    #[arg(long)]
-    http_port: Option<u16>,
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Start the daemon (default if no command specified).
+    Start {
+        /// Log level (trace, debug, info, warn, error). Overrides config.
+        #[arg(long)]
+        log_level: Option<String>,
+
+        /// Log format: "text" or "json". Overrides config.
+        #[arg(long)]
+        log_format: Option<String>,
+
+        /// Use stdio transport (newline-delimited JSON-RPC over stdin/stdout).
+        #[arg(long)]
+        stdio: bool,
+
+        /// Start WebSocket server on specified port.
+        #[arg(long)]
+        ws_port: Option<u16>,
+
+        /// Start HTTP server on specified port.
+        #[arg(long)]
+        http_port: Option<u16>,
+
+        /// Allow multiple daemon instances (for testing).
+        #[arg(long)]
+        no_single_instance: bool,
+    },
+
+    /// Stop the running daemon.
+    Stop,
+
+    /// Show daemon health status.
+    Health,
+
+    /// Show session summary.
+    Status,
+
+    /// List recent events.
+    Events {
+        /// Maximum number of events to show.
+        #[arg(long, short = 'n', default_value_t = 20)]
+        limit: u32,
+    },
+
+    /// Show or modify configuration.
+    Config,
+
+    /// Run self-test checks.
+    SelfTest,
 }
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    init_tracing(&args.log_level);
+    let format = if args.json {
+        OutputFormat::Json
+    } else {
+        OutputFormat::Text
+    };
 
-    let config = match ConfigManager::load_from_fs(args.config) {
+    // Default to Start command if none specified
+    let command = args.command.unwrap_or(Command::Start {
+        log_level: None,
+        log_format: None,
+        stdio: false,
+        ws_port: None,
+        http_port: None,
+        no_single_instance: false,
+    });
+
+    match command {
+        Command::Start {
+            log_level,
+            log_format,
+            stdio,
+            ws_port,
+            http_port,
+            no_single_instance,
+        } => {
+            run_daemon(args.config, log_level, log_format, stdio, ws_port, http_port, no_single_instance).await;
+        }
+
+        Command::Stop => {
+            if let Err(e) = cli::cmd_stop(None) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+
+        Command::Health => {
+            if let Err(e) = cli::cmd_health(args.port, format, args.admin_token) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+
+        Command::Status => {
+            if let Err(e) = cli::cmd_status(args.port, format, args.admin_token) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+
+        Command::Events { limit } => {
+            if let Err(e) = cli::cmd_events(args.port, format, args.admin_token, Some(limit)) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+
+        Command::Config => {
+            if let Err(e) = cli::cmd_config(args.port, format, args.admin_token) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+
+        Command::SelfTest => {
+            if let Err(e) = cli::cmd_self_test(args.port, format, args.admin_token) {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        }
+    }
+}
+
+async fn run_daemon(
+    config_path: Option<std::path::PathBuf>,
+    log_level: Option<String>,
+    log_format: Option<String>,
+    stdio: bool,
+    ws_port: Option<u16>,
+    http_port: Option<u16>,
+    no_single_instance: bool,
+) {
+    // Acquire single-instance lock (unless disabled for testing)
+    let _instance_guard = if no_single_instance {
+        None
+    } else {
+        match InstanceGuard::acquire() {
+            Ok(guard) => Some(guard),
+            Err(err) => {
+                eprintln!("Error: {err}");
+                std::process::exit(1);
+            }
+        }
+    };
+
+    // Load config first (with basic stderr output for errors)
+    let config = match ConfigManager::load_from_fs(config_path) {
         Ok(manager) => manager,
         Err(err) => {
-            tracing::error!(error = %err, "failed to load config");
+            eprintln!("Error: Failed to load config: {err}");
             std::process::exit(2);
         }
     };
 
+    // Build logging config from config file + CLI overrides
+    let mut log_config = config.current().logging;
+    if let Some(level) = log_level {
+        log_config.level = level;
+    }
+    if let Some(format) = log_format {
+        log_config.format = format;
+    }
+
+    // Initialize structured logging (keep guard alive for duration of program)
+    let _log_guard = logging::init(&log_config);
+
     tracing::info!(
         daemon = ntm_tracker_daemon::APP_NAME,
         version = ntm_tracker_daemon::version(),
-        config_path = %config_path(&config),
+        config_path = %config_path_str(&config),
+        log_level = %log_config.level,
+        log_format = %log_config.format,
         "daemon bootstrap"
     );
 
@@ -54,11 +218,14 @@ async fn main() {
     let cache = Arc::new(Cache::new(1000));
     let ctx = Arc::new(RpcContext::new(cache, config));
 
+    // Create shutdown handler for graceful shutdown
+    let shutdown_handler = ShutdownHandler::new();
+
     // Determine which transports to start
-    let use_stdio = args.stdio || (args.ws_port.is_none() && args.http_port.is_none());
+    let use_stdio = stdio || (ws_port.is_none() && http_port.is_none());
 
     // Spawn WS server if requested
-    if let Some(port) = args.ws_port {
+    if let Some(port) = ws_port {
         let ws_config = transport::ws::WsConfig {
             port,
             admin_token: None, // TODO: get from config
@@ -72,7 +239,7 @@ async fn main() {
     }
 
     // Spawn HTTP server if requested
-    if let Some(port) = args.http_port {
+    if let Some(port) = http_port {
         let http_config = transport::http::HttpConfig {
             port,
             admin_token: None, // TODO: get from config
@@ -96,27 +263,22 @@ async fn main() {
         transport::stdio::run(ctx, notif_rx).await;
     } else {
         // If WS or HTTP is running, we need to keep the main task alive
-        // Use tokio::signal to wait for shutdown
+        // Wait for shutdown signal (SIGTERM, SIGINT)
         tracing::info!("Running with WS/HTTP transports, waiting for shutdown signal");
-        match tokio::signal::ctrl_c().await {
-            Ok(()) => {
-                tracing::info!("Received shutdown signal");
-            }
-            Err(e) => {
-                tracing::error!(error = %e, "Failed to wait for shutdown signal");
-            }
-        }
+        shutdown_handler.wait_for_signal().await;
+
+        // Allow graceful shutdown (1 second timeout)
+        shutdown_handler
+            .graceful_shutdown(std::time::Duration::from_secs(1))
+            .await;
     }
+
+    tracing::info!("Daemon shutdown complete");
 }
 
-fn config_path(config: &ConfigManager) -> String {
+fn config_path_str(config: &ConfigManager) -> String {
     config
         .config_path()
         .map(|path| path.display().to_string())
         .unwrap_or_else(|| "<defaults>".to_string())
-}
-
-fn init_tracing(level: &str) {
-    let filter = EnvFilter::try_new(level).unwrap_or_else(|_| EnvFilter::new("info"));
-    tracing_subscriber::fmt().with_env_filter(filter).init();
 }

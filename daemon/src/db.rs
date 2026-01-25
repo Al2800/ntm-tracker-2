@@ -1,3 +1,4 @@
+use crate::metrics::{Timer, METRICS};
 use rusqlite::{Connection, OptionalExtension, Transaction};
 use std::path::Path;
 
@@ -80,6 +81,7 @@ fn read_schema_version(conn: &Connection) -> rusqlite::Result<u32> {
 }
 
 fn apply_migration(conn: &mut Connection, migration: &Migration) -> rusqlite::Result<()> {
+    let _timer = Timer::new(&METRICS.db_write);
     let tx = conn.transaction()?;
     tx.execute_batch(migration.sql)?;
     write_schema_version(&tx, migration.version)?;

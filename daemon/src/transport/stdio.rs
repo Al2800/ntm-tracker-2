@@ -5,6 +5,7 @@
 
 use crate::rpc::{self, RpcContext};
 use crate::transport::{JsonRpcError, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse};
+use crate::metrics::{Timer, METRICS};
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -93,6 +94,7 @@ fn process_line(line: &str, ctx: &RpcContext) -> Option<JsonRpcResponse> {
         None => {
             debug!(method = %request.method, "received notification (no response)");
             // Process notification but don't respond
+            let _timer = Timer::new(&METRICS.rpc_request);
             let _ = rpc::handle(&request.method, request.params, ctx);
             return None;
         }
@@ -100,6 +102,7 @@ fn process_line(line: &str, ctx: &RpcContext) -> Option<JsonRpcResponse> {
 
     // Handle the request
     debug!(method = %request.method, "handling request");
+    let _timer = Timer::new(&METRICS.rpc_request);
     let result = rpc::handle(&request.method, request.params, ctx);
 
     Some(match result {

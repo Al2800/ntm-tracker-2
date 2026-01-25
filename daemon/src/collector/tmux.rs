@@ -1,6 +1,7 @@
 use crate::bus::{EventBus, StateChange};
 use crate::cache::Cache;
 use crate::command::{CommandCategory, CommandRunner, CommandSpec};
+use crate::metrics::{Timer, METRICS};
 use crate::models::pane::{Pane, PaneStatus};
 use crate::models::session::{Session, SessionStatus};
 use crate::parsers::tmux_panes::{parse_tmux_panes, TmuxPaneMeta};
@@ -62,6 +63,7 @@ impl TmuxCollector {
     }
 
     pub async fn poll_once(&mut self) -> Result<TmuxPollResult, String> {
+        let _timer = Timer::new(&METRICS.poll_cycle);
         let spec = CommandSpec {
             program: "tmux".to_string(),
             args: vec![

@@ -1,3 +1,4 @@
+use crate::metrics::{Timer, METRICS};
 use crate::models::pane::Pane;
 use crate::models::session::Session;
 use serde_json::Value;
@@ -89,6 +90,7 @@ impl EventBus {
     }
 
     pub fn publish_state(&self, change: StateChange) -> Result<usize, broadcast::error::SendError<StateChange>> {
+        let _timer = Timer::new(&METRICS.event_processing);
         match self.state_tx.send(change) {
             Ok(count) => {
                 self.state_sent.fetch_add(1, Ordering::Relaxed);
@@ -102,6 +104,7 @@ impl EventBus {
     }
 
     pub fn publish_event(&self, event: DaemonEvent) -> Result<usize, broadcast::error::SendError<DaemonEvent>> {
+        let _timer = Timer::new(&METRICS.event_processing);
         match self.event_tx.send(event) {
             Ok(count) => {
                 self.events_sent.fetch_add(1, Ordering::Relaxed);
@@ -118,6 +121,7 @@ impl EventBus {
         &self,
         update: ClientUpdate,
     ) -> Result<usize, broadcast::error::SendError<ClientUpdate>> {
+        let _timer = Timer::new(&METRICS.event_processing);
         match self.client_tx.send(update) {
             Ok(count) => {
                 self.client_sent.fetch_add(1, Ordering::Relaxed);
