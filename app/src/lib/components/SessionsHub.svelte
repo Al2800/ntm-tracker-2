@@ -148,12 +148,11 @@
     </select>
   </div>
 
-  <!-- Session list (with virtual scroll optimization) -->
+  <!-- Session list (with scroll optimization) -->
   <div
     class="flex-1 space-y-1.5 overflow-y-auto"
     role="list"
     aria-label="Session list"
-    style="will-change: scroll-position;"
   >
     {#if filteredSessions.length === 0}
       <EmptyState

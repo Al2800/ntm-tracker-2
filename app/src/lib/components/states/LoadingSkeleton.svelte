@@ -64,7 +64,7 @@
 {:else if variant === 'text'}
   <div class="animate-pulse space-y-2">
     {#each Array(count) as _, i (i)}
-      <div class="h-3 rounded bg-surface-base" style="width: {75 + Math.random() * 25}%"></div>
+      <div class="h-3 rounded bg-surface-base" style="width: {75 + ((i * 17) % 25)}%"></div>
     {/each}
   </div>
 {:else if variant === 'chart'}
@@ -80,7 +80,7 @@
       {#each Array(24) as _, i (i)}
         <div
           class="flex-1 rounded-sm bg-surface-base"
-          style="height: {20 + Math.random() * 80}%"
+          style="height: {20 + ((i * 37 + 13) % 80)}%"
         ></div>
       {/each}
     </div>
