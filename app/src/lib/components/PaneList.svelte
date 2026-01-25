@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, tick } from 'svelte';
   import type { Pane } from '../types';
   import { getPaneStatus } from '../status';
 
@@ -7,6 +7,8 @@
   export let dense = false;
   export let selectable = false;
   export let selectedPaneId: string | null = null;
+
+  let listContainer: HTMLElement;
 
   const dispatch = createEventDispatcher<{ select: { paneUid: string } }>();
 
@@ -20,19 +22,59 @@
     const hours = Math.floor(minutes / 60);
     return `${hours}h ago`;
   };
+
+  const handleKeydown = async (event: KeyboardEvent, index: number) => {
+    if (!selectable || panes.length === 0) return;
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        await focusPane(Math.min(index + 1, panes.length - 1));
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        await focusPane(Math.max(index - 1, 0));
+        break;
+      case 'Home':
+        event.preventDefault();
+        await focusPane(0);
+        break;
+      case 'End':
+        event.preventDefault();
+        await focusPane(panes.length - 1);
+        break;
+    }
+  };
+
+  const focusPane = async (index: number) => {
+    await tick();
+    const buttons = listContainer?.querySelectorAll('[data-pane-button]');
+    const button = buttons?.[index] as HTMLElement;
+    button?.focus();
+  };
 </script>
 
-<div class={dense ? 'mt-3 space-y-1.5' : 'mt-3 space-y-2'}>
-  {#each panes as pane (pane.paneUid)}
+<div
+  bind:this={listContainer}
+  class={dense ? 'mt-3 space-y-1.5' : 'mt-3 space-y-2'}
+  role={selectable ? 'listbox' : 'list'}
+  aria-label="Pane list"
+>
+  {#each panes as pane, index (pane.paneUid)}
     {@const paneStatus = getPaneStatus(pane.status)}
     <button
+      data-pane-button
       type="button"
-      class={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition ${
+      role={selectable ? 'option' : 'listitem'}
+      aria-selected={selectable ? selectedPaneId === pane.paneUid : undefined}
+      aria-label="Pane {pane.index}, {paneStatus.label}{pane.agentType ? `, ${pane.agentType}` : ''}"
+      class={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-border-focus focus-visible:ring-offset-1 focus-visible:ring-offset-surface-base ${
         selectedPaneId === pane.paneUid
           ? 'card-selected'
           : 'border-border bg-surface-base hover:border-border-strong'
       } ${selectable ? 'card-interactive' : 'cursor-default'}`}
       on:click={() => selectable && dispatch('select', { paneUid: pane.paneUid })}
+      on:keydown={(e) => handleKeydown(e, index)}
     >
       <div class="flex items-center gap-3">
         <span class="status-dot {paneStatus.dot}"></span>

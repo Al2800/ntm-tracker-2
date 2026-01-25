@@ -23,70 +23,76 @@
 
 <div class="space-y-4">
   <!-- Section: Activity -->
-  <section>
+  <section aria-labelledby="activity-heading">
     <button
       type="button"
-      class="flex w-full items-center justify-between py-1 text-left"
+      class="flex w-full items-center justify-between py-1 text-left focus-ring rounded"
       on:click={() => showActivity = !showActivity}
+      aria-expanded={showActivity}
+      aria-controls="activity-content"
     >
-      <h2 class="label">Activity</h2>
-      <span class="text-text-subtle transition-transform" class:rotate-180={!showActivity}>
+      <h2 id="activity-heading" class="label">Activity</h2>
+      <span class="text-text-subtle transition-transform" class:rotate-180={!showActivity} aria-hidden="true">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
         </svg>
       </span>
     </button>
     {#if showActivity}
-      <div class="mt-2 animate-fade-in">
+      <div id="activity-content" class="mt-2 animate-fade-in">
         <ActivityGraph height={120} showLegend={false} />
       </div>
     {/if}
   </section>
 
   <!-- Section: Escalations -->
-  <section>
+  <section aria-labelledby="escalations-heading">
     <button
       type="button"
-      class="flex w-full items-center justify-between py-1 text-left"
+      class="flex w-full items-center justify-between py-1 text-left focus-ring rounded"
       on:click={() => showEscalations = !showEscalations}
+      aria-expanded={showEscalations}
+      aria-controls="escalations-content"
     >
       <div class="flex items-center gap-2">
-        <h2 class="label">Escalations</h2>
+        <h2 id="escalations-heading" class="label">Escalations</h2>
         {#if pendingCount > 0}
-          <span class="badge badge-error text-2xs py-0 px-1.5">
+          <span class="badge badge-error text-2xs py-0 px-1.5" aria-label="{pendingCount} pending escalations">
             {pendingCount}
           </span>
         {/if}
       </div>
-      <span class="text-text-subtle transition-transform" class:rotate-180={!showEscalations}>
+      <span class="text-text-subtle transition-transform" class:rotate-180={!showEscalations} aria-hidden="true">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
         </svg>
       </span>
     </button>
     {#if showEscalations}
-      <div class="mt-2 animate-fade-in">
+      <div id="escalations-content" class="mt-2 animate-fade-in">
         <EscalationPanel />
       </div>
     {/if}
   </section>
 
   <!-- Section: Timeline -->
-  <section>
+  <section aria-labelledby="timeline-heading">
     <button
       type="button"
-      class="flex w-full items-center justify-between py-1 text-left"
+      class="flex w-full items-center justify-between py-1 text-left focus-ring rounded"
       on:click={() => showTimeline = !showTimeline}
+      aria-expanded={showTimeline}
+      aria-controls="timeline-content"
     >
-      <h2 class="label">Timeline</h2>
-      <span class="text-text-subtle transition-transform" class:rotate-180={!showTimeline}>
+      <h2 id="timeline-heading" class="label">Timeline</h2>
+      <span class="text-text-subtle transition-transform" class:rotate-180={!showTimeline} aria-hidden="true">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
         </svg>
       </span>
     </button>
     {#if showTimeline}
-      <div class="mt-2 animate-fade-in">
+      <div id="timeline-content" class="mt-2 animate-fade-in">
         <TimelinePanel limit={15} />
       </div>
     {/if}

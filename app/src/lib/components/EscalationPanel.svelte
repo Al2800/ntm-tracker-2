@@ -51,7 +51,10 @@
       <h3 class="label">Escalation Inbox</h3>
       <p class="mt-1 text-xs text-text-subtle">Pending alerts that need human attention.</p>
     </div>
-    <span class="badge {pending.length > 0 ? 'badge-error' : 'badge-neutral'}">
+    <span
+      class="badge {pending.length > 0 ? 'badge-error' : 'badge-neutral'}"
+      aria-label="{pending.length} open escalations"
+    >
       {pending.length} open
     </span>
   </div>
@@ -66,16 +69,16 @@
       />
     </div>
   {:else}
-    <div class="mt-4 space-y-3">
+    <div class="mt-4 space-y-3" role="list" aria-label="Pending escalations">
       {#each sorted as event (event.id)}
         {@const severity = getEscalationSeverity(mapSeverity(event.severity))}
-        <div class="card-compact card-interactive {severity.rank <= 1 ? 'card-critical' : ''}">
+        <div class="card-compact card-interactive {severity.rank <= 1 ? 'card-critical' : ''}" role="listitem">
           <div class="flex items-start justify-between gap-4">
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
-                <span class="status-dot {severity.dot}"></span>
+                <span class="status-dot {severity.dot}" aria-hidden="true"></span>
                 <span class="badge {severity.badge} py-0.5 px-2 text-[10px]">
-                  {severity.label}
+                  <span class="sr-only">Severity:</span> {severity.label}
                 </span>
                 <span class="text-xs font-mono text-text-muted truncate">{labelFor(event)}</span>
               </div>
@@ -83,22 +86,25 @@
             </div>
             <span class="text-xs text-text-subtle shrink-0">{formatAge(event.detectedAt)}</span>
           </div>
-          <div class="mt-3 flex flex-wrap gap-2">
+          <div class="mt-3 flex flex-wrap gap-2" role="group" aria-label="Escalation actions">
             <button
               class="btn btn-sm btn-secondary"
               on:click={() => dispatch('focus', { eventId: event.id })}
+              aria-label="Focus on escalation from {labelFor(event)}"
             >
               Focus
             </button>
             <button
               class="btn btn-sm btn-ghost"
               on:click={() => dispatch('snooze', { eventId: event.id })}
+              aria-label="Snooze escalation from {labelFor(event)} for 15 minutes"
             >
               Snooze 15m
             </button>
             <button
               class="btn btn-sm btn-ghost"
               on:click={() => dispatch('dismiss', { eventId: event.id })}
+              aria-label="Dismiss escalation from {labelFor(event)}"
             >
               Dismiss
             </button>

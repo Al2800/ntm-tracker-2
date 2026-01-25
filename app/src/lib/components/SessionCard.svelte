@@ -50,9 +50,21 @@
 </script>
 
 <div
-  class={`group relative overflow-hidden rounded-2xl border bg-slate-900/60 ${
+  data-session-card
+  id="session-{session.sessionUid}"
+  tabindex="0"
+  role="option"
+  aria-selected={expanded}
+  aria-label="{session.name}, {session.status}, {session.paneCount} panes"
+  class={`group relative overflow-hidden rounded-2xl border bg-slate-900/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-border-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base ${
     pinned ? 'border-sky-500/40 ring-1 ring-sky-500/20' : 'border-slate-800/80'
   } ${dense ? 'p-3' : 'p-4'}`}
+  on:keydown={(e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      dispatch('toggle', { sessionUid: session.sessionUid });
+    }
+  }}
 >
   <div class="pointer-events-none absolute inset-0 bg-gradient-to-br from-sky-500/10 via-transparent to-emerald-500/10 opacity-0 transition group-hover:opacity-100"></div>
   <!-- Header row with toggle area and actions -->

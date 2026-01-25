@@ -100,16 +100,25 @@
 
   onMount(() => {
     mounted = true;
-    const onKeydown = (event: KeyboardEvent) => {
-      if (!(event.key === 'k' || event.key === 'K')) {
-        return;
-      }
-      if (!(event.ctrlKey || event.metaKey)) {
+    const onKeydown = async (event: KeyboardEvent) => {
+      // Escape key closes popover in compact mode
+      if (event.key === 'Escape' && compactMode) {
+        event.preventDefault();
+        try {
+          const { getCurrentWindow } = await import('@tauri-apps/api/window');
+          await getCurrentWindow().hide();
+        } catch {
+          // Not in Tauri environment
+        }
         return;
       }
 
-      event.preventDefault();
-      searchInput?.focus();
+      // Ctrl/Cmd+K focuses search
+      if ((event.key === 'k' || event.key === 'K') && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        searchInput?.focus();
+        return;
+      }
     };
 
     window.addEventListener('keydown', onKeydown);

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount, tick } from 'svelte';
   import type { Session } from '../types';
   import { sessions, selectedSessionId, selectSession, pinnedSessionIds, togglePinSession } from '../stores/sessions';
   import SessionCard from './SessionCard.svelte';
@@ -7,6 +8,9 @@
   export let query = '';
   export let dense = false;
   export let showControls = true;
+
+  let listContainer: HTMLElement;
+  let focusedIndex = -1;
 
   type StatusFilter = 'all' | 'active' | 'idle' | 'waiting' | 'ended';
   type SortOption = 'status' | 'name' | 'activity' | 'panes';
@@ -120,9 +124,73 @@
     { value: 'activity', label: 'Recent Activity' },
     { value: 'panes', label: 'Pane Count' }
   ];
+
+  // Keyboard navigation handlers
+  const handleKeydown = async (event: KeyboardEvent) => {
+    if (filteredSessions.length === 0) return;
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        focusedIndex = Math.min(focusedIndex + 1, filteredSessions.length - 1);
+        await focusSession(focusedIndex);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        focusedIndex = Math.max(focusedIndex - 1, 0);
+        await focusSession(focusedIndex);
+        break;
+      case 'Enter':
+      case ' ':
+        event.preventDefault();
+        if (focusedIndex >= 0 && focusedIndex < filteredSessions.length) {
+          handleToggle(filteredSessions[focusedIndex].sessionUid);
+        }
+        break;
+      case 'Escape':
+        event.preventDefault();
+        if ($selectedSessionId) {
+          selectSession(null);
+        }
+        focusedIndex = -1;
+        break;
+      case 'Home':
+        event.preventDefault();
+        focusedIndex = 0;
+        await focusSession(focusedIndex);
+        break;
+      case 'End':
+        event.preventDefault();
+        focusedIndex = filteredSessions.length - 1;
+        await focusSession(focusedIndex);
+        break;
+    }
+  };
+
+  const focusSession = async (index: number) => {
+    await tick();
+    const cards = listContainer?.querySelectorAll('[data-session-card]');
+    const card = cards?.[index] as HTMLElement;
+    card?.focus();
+  };
+
+  // Reset focused index when list changes
+  $: if (filteredSessions) {
+    if (focusedIndex >= filteredSessions.length) {
+      focusedIndex = Math.max(0, filteredSessions.length - 1);
+    }
+  }
 </script>
 
-<div class={dense ? 'space-y-3' : 'space-y-4'}>
+<div
+  bind:this={listContainer}
+  class={dense ? 'space-y-3' : 'space-y-4'}
+  role="listbox"
+  tabindex="0"
+  aria-label="Session list"
+  aria-activedescendant={focusedIndex >= 0 ? `session-${filteredSessions[focusedIndex]?.sessionUid}` : undefined}
+  on:keydown={handleKeydown}
+>
   <!-- Filter & Sort Controls -->
   {#if showControls && !dense}
     <div class="flex flex-wrap items-center gap-3">

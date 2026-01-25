@@ -83,20 +83,22 @@
 
 <div class="flex h-full flex-col">
   <!-- Filter chips -->
-  <div class="mb-3 flex flex-wrap gap-1.5">
+  <div class="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Filter sessions by status">
     {#each filters as filter}
       <button
         type="button"
-        class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-medium transition-colors"
+        class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-medium transition-colors focus-ring"
         class:bg-accent-muted={statusFilter === filter.value}
         class:text-accent={statusFilter === filter.value}
         class:bg-surface-base={statusFilter !== filter.value}
         class:text-text-muted={statusFilter !== filter.value}
         class:hover:text-text-secondary={statusFilter !== filter.value}
         on:click={() => statusFilter = filter.value}
+        aria-pressed={statusFilter === filter.value}
+        aria-label="Filter by {filter.label} sessions, {filter.count()} available"
       >
         {filter.label}
-        <span class="rounded-full bg-surface-base px-1.5 text-text-subtle">
+        <span class="rounded-full bg-surface-base px-1.5 text-text-subtle" aria-hidden="true">
           {filter.count()}
         </span>
       </button>
@@ -105,12 +107,15 @@
 
   <!-- Sort dropdown -->
   <div class="mb-3 flex items-center justify-between">
-    <span class="text-2xs text-text-subtle">
+    <span class="text-2xs text-text-subtle" aria-live="polite">
       {filteredSessions.length} session{filteredSessions.length !== 1 ? 's' : ''}
     </span>
+    <label class="sr-only" for="session-sort">Sort sessions by</label>
     <select
+      id="session-sort"
       bind:value={sortBy}
-      class="rounded border border-border bg-surface-base px-2 py-1 text-2xs text-text-secondary focus:border-border-focus focus:outline-none"
+      class="rounded border border-border bg-surface-base px-2 py-1 text-2xs text-text-secondary focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus"
+      aria-label="Sort sessions by"
     >
       <option value="status">Sort: Status</option>
       <option value="name">Sort: Name</option>
@@ -119,7 +124,7 @@
   </div>
 
   <!-- Session list -->
-  <div class="flex-1 space-y-1.5 overflow-y-auto">
+  <div class="flex-1 space-y-1.5 overflow-y-auto" role="list" aria-label="Session list">
     {#if filteredSessions.length === 0}
       <EmptyState
         icon={searchQuery || statusFilter !== 'all' ? 'search' : 'sessions'}

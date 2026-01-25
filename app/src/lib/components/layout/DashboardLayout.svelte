@@ -63,7 +63,7 @@
         </aside>
 
         <!-- Main content -->
-        <main class="flex flex-1 flex-col overflow-hidden">
+        <main id="main-content" class="flex flex-1 flex-col overflow-hidden" tabindex="-1">
           <!-- Primary content area (focus panel) -->
           <div class="flex-1 overflow-y-auto">
             <div class="mx-auto max-w-5xl p-6">

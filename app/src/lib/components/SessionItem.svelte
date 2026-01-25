@@ -54,7 +54,7 @@
 
 <button
   type="button"
-  class="group relative w-full rounded-lg border p-2.5 text-left transition-all"
+  class="group relative w-full rounded-lg border p-2.5 text-left transition-all focus-ring"
   class:border-accent={selected}
   class:bg-accent-muted={selected}
   class:border-border={!selected}
@@ -64,6 +64,10 @@
   on:click={() => dispatch('select')}
   on:mouseenter={() => showActions = true}
   on:mouseleave={() => showActions = false}
+  on:focus={() => showActions = true}
+  on:blur={() => showActions = false}
+  aria-label="Session {session.name}, status {session.status}, {totalCount} pane{totalCount !== 1 ? 's' : ''}"
+  aria-pressed={selected}
 >
   <div class="flex items-start gap-2.5">
     <!-- Status indicator -->
@@ -103,8 +107,9 @@
     <div class="absolute right-1.5 top-1.5 flex gap-1 animate-fade-in">
       <button
         type="button"
-        class="rounded bg-surface-elevated p-1 text-text-muted hover:bg-surface-overlay hover:text-text-primary"
+        class="rounded bg-surface-elevated p-1 text-text-muted hover:bg-surface-overlay hover:text-text-primary focus-ring"
         title="Copy attach command"
+        aria-label="Copy attach command for {session.name}"
         on:click|stopPropagation={handleCopyAttach}
       >
         <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

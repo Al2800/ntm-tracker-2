@@ -55,6 +55,7 @@
       type="button"
       class="chip chip-default"
       on:click={() => (order = order === 'desc' ? 'asc' : 'desc')}
+      aria-label="Sort order: {order === 'desc' ? 'newest first' : 'oldest first'}. Click to toggle."
     >
       {order === 'desc' ? 'Newest first' : 'Oldest first'}
     </button>
@@ -70,10 +71,10 @@
       />
     </div>
   {:else}
-    <div class="mt-4 space-y-1.5 max-h-[320px] overflow-y-auto">
+    <div class="mt-4 space-y-1.5 max-h-[320px] overflow-y-auto" role="list" aria-label="Timeline events">
       {#each sorted as event (event.id)}
         {@const eventType = getEventType(event.type)}
-        <div class="tray-item group">
+        <div class="tray-item group" role="listitem">
           <div class="flex items-center gap-3 min-w-0">
             <span class="text-base" title={eventType.description}>{eventType.icon}</span>
             <div class="min-w-0 flex-1">
