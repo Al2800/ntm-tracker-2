@@ -34,12 +34,24 @@
     unknown: 4
   };
 
-  const filters: { value: StatusFilter; label: string; count: () => number }[] = [
-    { value: 'all', label: 'All', count: () => $sessions.length },
-    { value: 'active', label: 'Active', count: () => $sessions.filter(s => s.status === 'active').length },
-    { value: 'idle', label: 'Idle', count: () => $sessions.filter(s => s.status === 'idle').length },
-    { value: 'ended', label: 'Ended', count: () => $sessions.filter(s => s.status === 'ended').length }
+  // Memoize filter counts to avoid recalculating on every render
+  $: statusCounts = {
+    all: $sessions.length,
+    active: $sessions.filter(s => s.status === 'active').length,
+    idle: $sessions.filter(s => s.status === 'idle').length,
+    ended: $sessions.filter(s => s.status === 'ended').length
+  };
+
+  const filterLabels: { value: StatusFilter; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'active', label: 'Active' },
+    { value: 'idle', label: 'Idle' },
+    { value: 'ended', label: 'Ended' }
   ];
+
+  // Render limit for large lists (show "load more" after this)
+  const INITIAL_RENDER_LIMIT = 50;
+  let renderLimit = INITIAL_RENDER_LIMIT;
 
   // Search matching
   const matchesSearch = (session: Session, query: string) => {
@@ -48,7 +60,7 @@
     return haystack.includes(query.toLowerCase());
   };
 
-  // Filter and sort sessions
+  // Filter and sort sessions (memoized)
   $: filteredSessions = $sessions
     .filter(session => {
       // Status filter
@@ -71,6 +83,19 @@
       }
     });
 
+  // Visible sessions (limited for performance with large lists)
+  $: visibleSessions = filteredSessions.slice(0, renderLimit);
+  $: hasMore = filteredSessions.length > renderLimit;
+
+  // Reset render limit when filters change
+  $: if (statusFilter || searchQuery || sortBy) {
+    renderLimit = INITIAL_RENDER_LIMIT;
+  }
+
+  function showMore() {
+    renderLimit += INITIAL_RENDER_LIMIT;
+  }
+
   function handleSelect(session: Session) {
     selectSession(session.sessionUid);
     dispatch('focus', { session });
@@ -84,7 +109,7 @@
 <div class="flex h-full flex-col">
   <!-- Filter chips -->
   <div class="mb-3 flex flex-wrap gap-1.5" role="group" aria-label="Filter sessions by status">
-    {#each filters as filter}
+    {#each filterLabels as filter}
       <button
         type="button"
         class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-medium transition-colors focus-ring"
@@ -95,11 +120,11 @@
         class:hover:text-text-secondary={statusFilter !== filter.value}
         on:click={() => statusFilter = filter.value}
         aria-pressed={statusFilter === filter.value}
-        aria-label="Filter by {filter.label} sessions, {filter.count()} available"
+        aria-label="Filter by {filter.label} sessions, {statusCounts[filter.value]} available"
       >
         {filter.label}
         <span class="rounded-full bg-surface-base px-1.5 text-text-subtle" aria-hidden="true">
-          {filter.count()}
+          {statusCounts[filter.value]}
         </span>
       </button>
     {/each}
@@ -123,8 +148,13 @@
     </select>
   </div>
 
-  <!-- Session list -->
-  <div class="flex-1 space-y-1.5 overflow-y-auto" role="list" aria-label="Session list">
+  <!-- Session list (with virtual scroll optimization) -->
+  <div
+    class="flex-1 space-y-1.5 overflow-y-auto"
+    role="list"
+    aria-label="Session list"
+    style="will-change: scroll-position;"
+  >
     {#if filteredSessions.length === 0}
       <EmptyState
         icon={searchQuery || statusFilter !== 'all' ? 'search' : 'sessions'}
@@ -133,7 +163,7 @@
         compact
       />
     {:else}
-      {#each filteredSessions as session (session.sessionUid)}
+      {#each visibleSessions as session (session.sessionUid)}
         <SessionItem
           {session}
           selected={session.sessionUid === $selectedSessionId}
@@ -141,6 +171,17 @@
           on:action={(e) => handleAction(session, e.detail)}
         />
       {/each}
+      {#if hasMore}
+        <div class="pt-2 pb-1 text-center">
+          <button
+            type="button"
+            class="btn btn-sm btn-ghost text-2xs"
+            on:click={showMore}
+          >
+            Show more ({filteredSessions.length - renderLimit} remaining)
+          </button>
+        </div>
+      {/if}
     {/if}
   </div>
 </div>

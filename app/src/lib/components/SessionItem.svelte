@@ -54,7 +54,7 @@
 
 <button
   type="button"
-  class="group relative w-full rounded-lg border p-2.5 text-left transition-all focus-ring"
+  class="session-item group relative w-full rounded-lg border p-2.5 text-left transition-all focus-ring"
   class:border-accent={selected}
   class:bg-accent-muted={selected}
   class:border-border={!selected}
@@ -119,3 +119,10 @@
     </div>
   {/if}
 </button>
+
+<style>
+  /* CSS containment for scroll performance with large lists */
+  .session-item {
+    contain: layout style paint;
+  }
+</style>
