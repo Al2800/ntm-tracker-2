@@ -103,6 +103,7 @@ pub fn reconcile_ntm_markdown(
         let mut pane_record = cache
             .get_pane(&pane_uid)
             .unwrap_or_else(|| Pane::new(session_uid.clone(), pane_index, now, None, None, None));
+        pane_record.pane_uid = pane_uid.clone();
         pane_record.session_uid = session_uid.clone();
         pane_record.pane_index = pane_index;
         pane_record.last_seen_at = now;
@@ -228,4 +229,101 @@ fn extract_metadata(metadata: &HashMap<String, String>, keys: &[&str]) -> Option
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cache::Cache;
+    use crate::models::pane::Pane;
+    use crate::models::session::{Session, SessionStatus};
+    use crate::parsers::ntm_markdown::{NtmMarkdown, NtmPane, NtmSession};
+    use std::collections::HashMap;
+
+    #[test]
+    fn marks_missing_ntm_sessions_as_ended() {
+        let cache = Cache::new(128);
+        let now = 1_700_000_000;
+
+        let mut alpha = Session::new("ntm", "alpha", None, now - 60);
+        alpha.session_uid = "alpha_uid".to_string();
+        cache.upsert_session(alpha);
+
+        let mut beta = Session::new("ntm", "beta", None, now - 60);
+        beta.session_uid = "beta_uid".to_string();
+        cache.upsert_session(beta);
+
+        let markdown = NtmMarkdown {
+            sessions: vec![NtmSession {
+                name: "alpha".to_string(),
+                status: Some("active".to_string()),
+                metadata: HashMap::new(),
+            }],
+            panes: vec![NtmPane {
+                session: "alpha".to_string(),
+                pane: "0".to_string(),
+                status: Some("active".to_string()),
+                agent: None,
+                metadata: HashMap::new(),
+            }],
+        };
+
+        let mut session_uid_by_name = HashMap::new();
+        let mut pane_uid_by_key = HashMap::new();
+        let result = reconcile_ntm_markdown(
+            &cache,
+            &markdown,
+            now,
+            &mut session_uid_by_name,
+            &mut pane_uid_by_key,
+        );
+
+        assert_eq!(result.ended_sessions, 1);
+        let beta_out = result
+            .sessions
+            .iter()
+            .find(|session| session.name == "beta")
+            .expect("beta session present");
+        assert_eq!(beta_out.status, SessionStatus::Ended);
+        assert_eq!(beta_out.ended_at, Some(now));
+        assert_eq!(beta_out.status_reason.as_deref(), Some("ntm_missing"));
+    }
+
+    #[test]
+    fn preserves_pane_uids_using_lookup_tables() {
+        let cache = Cache::new(128);
+        let now = 1_700_000_000;
+
+        let mut session_uid_by_name = HashMap::new();
+        session_uid_by_name.insert("alpha".to_string(), "alpha_uid".to_string());
+
+        let mut pane_uid_by_key = HashMap::new();
+        pane_uid_by_key.insert("alpha:0".to_string(), "pane_uid".to_string());
+
+        let mut existing = Pane::new("alpha_uid".to_string(), 0, now - 60, None, None, None);
+        existing.pane_uid = "pane_uid".to_string();
+        cache.upsert_pane(existing);
+
+        let markdown = NtmMarkdown {
+            sessions: vec![],
+            panes: vec![NtmPane {
+                session: "alpha".to_string(),
+                pane: "0".to_string(),
+                status: Some("active".to_string()),
+                agent: None,
+                metadata: HashMap::new(),
+            }],
+        };
+
+        let result = reconcile_ntm_markdown(
+            &cache,
+            &markdown,
+            now,
+            &mut session_uid_by_name,
+            &mut pane_uid_by_key,
+        );
+
+        assert_eq!(result.panes.len(), 1);
+        assert_eq!(result.panes[0].pane_uid, "pane_uid");
+    }
 }
