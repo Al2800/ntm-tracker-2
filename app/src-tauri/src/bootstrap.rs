@@ -1,9 +1,11 @@
 use crate::commands::AppState;
 use crate::daemon::DaemonManager;
+use std::process::Command;
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
 const STARTUP_RETRY_FLOOR_MS: u64 = 1_000;
+const DAEMON_BIN_NAME: &str = "ntm-tracker-daemon";
 
 pub fn start(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
@@ -50,6 +52,19 @@ async fn ensure_daemon(app: &AppHandle) -> bool {
         return true;
     }
 
+    #[cfg(target_os = "windows")]
+    if transport == "wsl-stdio" {
+        if let Err(err) = ensure_wsl_daemon_installed() {
+            let state = app.state::<AppState>();
+            let mut guard = match state.0.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            guard.last_error = Some(err);
+            return false;
+        }
+    }
+
     let start_result =
         tauri::async_runtime::spawn_blocking(move || DaemonManager::start(&transport))
             .await
@@ -78,6 +93,64 @@ async fn ensure_daemon(app: &AppHandle) -> bool {
             false
         }
     }
+}
+
+#[cfg(target_os = "windows")]
+fn ensure_wsl_daemon_installed() -> Result<(), String> {
+    // If the daemon is already on PATH inside WSL, only ensure directories exist.
+    let version = env!("CARGO_PKG_VERSION");
+    let release_tag = format!("v{version}");
+    let download_url = format!(
+        "https://github.com/Al2800/ntm-tracker-2/releases/download/{release_tag}/{DAEMON_BIN_NAME}-x86_64-unknown-linux-gnu"
+    );
+
+    let script = format!(
+        r#"set -euo pipefail
+
+BIN="$HOME/.local/bin/{bin}"
+CONFIG_DIR="$HOME/.config/ntm-tracker"
+DATA_DIR="$HOME/.local/share/ntm-tracker"
+
+mkdir -p "$(dirname "$BIN")" "$CONFIG_DIR" "$DATA_DIR"
+
+if command -v "{bin}" >/dev/null 2>&1; then
+  exit 0
+fi
+
+if ! command -v curl >/dev/null 2>&1; then
+  echo "curl is required inside WSL to download {bin} (missing)" >&2
+  exit 2
+fi
+
+tmp="$(mktemp)"
+curl -fL "{url}" -o "$tmp"
+chmod +x "$tmp"
+mv "$tmp" "$BIN"
+
+"$BIN" --version >/dev/null
+"#,
+        bin = DAEMON_BIN_NAME,
+        url = download_url
+    );
+
+    let output = Command::new("wsl.exe")
+        .args(["--", "sh", "-lc", &script])
+        .output()
+        .map_err(|err| format!("Unable to run WSL bootstrap: {err}"))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "WSL daemon bootstrap failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn ensure_wsl_daemon_installed() -> Result<(), String> {
+    Ok(())
 }
 
 fn next_retry_delay(app: &AppHandle) -> Option<u64> {
