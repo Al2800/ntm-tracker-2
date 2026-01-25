@@ -229,7 +229,7 @@
 
         <!-- Pending alerts (compact) -->
         {#if pendingEscalations.length > 0}
-          <div class="card-compact card-critical p-3">
+          <div class="card-compact card-warning p-3">
             <span class="label-sm text-status-warning-text">Pending Alerts</span>
             <div class="mt-2 space-y-1">
               {#each pendingEscalations.slice(0, 3) as escalation (escalation.id)}
