@@ -26,43 +26,49 @@
   const labelFor = (event: TrackerEvent) => `${event.sessionUid}:${event.paneUid}`;
 </script>
 
-<div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+<div class="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5">
   <div class="flex items-center justify-between">
-    <h3 class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">
-      Escalation Inbox ({pending.length})
-    </h3>
+    <div>
+      <h3 class="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">
+        Escalation Inbox
+      </h3>
+      <p class="mt-1 text-xs text-slate-500">Pending alerts that need human attention.</p>
+    </div>
+    <span class="rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-xs text-rose-200">
+      {pending.length} open
+    </span>
   </div>
 
   {#if pending.length === 0}
-    <div class="mt-4 rounded-lg border border-dashed border-slate-700 p-6 text-center text-sm text-slate-500">
-      No pending escalations.
+    <div class="mt-4 rounded-xl border border-dashed border-slate-800 bg-slate-950/60 p-6 text-center text-sm text-slate-500">
+      Inbox clear. Escalations will appear here as soon as they trigger.
     </div>
   {:else}
     <div class="mt-4 space-y-3">
       {#each pending as event (event.id)}
-        <div class="rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+        <div class="rounded-xl border border-slate-800/80 bg-slate-950/70 p-4">
           <div class="flex items-start justify-between gap-4">
             <div>
-              <p class="text-sm font-semibold text-slate-200">⚠ {labelFor(event)}</p>
+              <p class="text-sm font-semibold text-slate-100">⚠ {labelFor(event)}</p>
               <p class="mt-1 text-xs text-slate-400">{event.message ?? 'Needs attention.'}</p>
             </div>
             <span class="text-xs text-slate-500">{formatAge(event.detectedAt)}</span>
           </div>
           <div class="mt-3 flex flex-wrap gap-2 text-xs">
             <button
-              class="rounded-md border border-slate-700 px-2 py-1 text-slate-200 hover:border-slate-500"
+              class="rounded-lg border border-slate-700/80 px-3 py-1.5 text-slate-200 transition hover:border-slate-500"
               on:click={() => dispatch('focus', { eventId: event.id })}
             >
               Focus
             </button>
             <button
-              class="rounded-md border border-slate-700 px-2 py-1 text-slate-200 hover:border-slate-500"
+              class="rounded-lg border border-slate-700/80 px-3 py-1.5 text-slate-200 transition hover:border-slate-500"
               on:click={() => dispatch('snooze', { eventId: event.id })}
             >
               Snooze 15m
             </button>
             <button
-              class="rounded-md border border-slate-700 px-2 py-1 text-slate-200 hover:border-slate-500"
+              class="rounded-lg border border-slate-700/80 px-3 py-1.5 text-slate-200 transition hover:border-slate-500"
               on:click={() => dispatch('dismiss', { eventId: event.id })}
             >
               Dismiss

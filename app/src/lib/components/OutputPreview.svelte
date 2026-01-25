@@ -213,7 +213,7 @@
   });
 </script>
 
-<div class="rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+<div class="rounded-2xl border border-slate-800/80 bg-slate-950/50 p-5">
   <div class="flex flex-wrap items-start justify-between gap-4">
     <div>
       <p class="text-sm font-semibold text-white">Output preview</p>
@@ -224,7 +224,7 @@
 
     <div class="flex flex-wrap items-center gap-2">
       <button
-        class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm hover:bg-slate-800 disabled:opacity-40"
+        class="rounded-lg border border-slate-700/80 bg-slate-900 px-3 py-2 text-sm text-slate-100 transition hover:border-slate-500 disabled:opacity-40"
         on:click={loadPreview}
         disabled={loading || !paneId}
       >
@@ -246,7 +246,7 @@
       </label>
 
       <button
-        class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm hover:bg-slate-800 disabled:opacity-40"
+        class="rounded-lg border border-slate-700/80 bg-slate-900 px-3 py-2 text-sm text-slate-100 transition hover:border-slate-500 disabled:opacity-40"
         on:click={() => preview && copyText(preview.content)}
         disabled={!preview}
       >
@@ -254,7 +254,7 @@
       </button>
 
       <button
-        class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm hover:bg-slate-800 disabled:opacity-40"
+        class="rounded-lg border border-slate-700/80 bg-slate-900 px-3 py-2 text-sm text-slate-100 transition hover:border-slate-500 disabled:opacity-40"
         on:click={handleAttach}
         disabled={attachLoading || !paneId}
       >
