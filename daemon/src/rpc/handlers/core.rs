@@ -2,6 +2,10 @@ use crate::rpc::handlers::{events, panes, sessions, stats};
 use crate::rpc::{RpcContext, RpcResult};
 use serde_json::{json, Value};
 
+pub fn hello(ctx: &RpcContext) -> RpcResult<Value> {
+    Ok(crate::rpc::hello_payload(ctx))
+}
+
 pub fn health_get(ctx: &RpcContext) -> RpcResult<Value> {
     let health = ctx.cache.health();
     let last_event_id = events::last_event_id(ctx.cache.as_ref());

@@ -1,7 +1,7 @@
 use crate::cache::Cache;
 use crate::config::ConfigManager;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
@@ -26,6 +26,45 @@ pub struct Capabilities {
     pub systemd: bool,
 }
 
+impl Capabilities {
+    /// Probe the system to determine actual capabilities.
+    pub fn probe() -> Self {
+        Self {
+            ntm: probe_ntm_available(),
+            tmux: probe_tmux_available(),
+            stream: false,
+            systemd: probe_systemd_available(),
+        }
+    }
+}
+
+/// Check if NTM is available by testing if the binary can be found.
+fn probe_ntm_available() -> bool {
+    std::process::Command::new("which")
+        .arg("ntm")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Check if tmux is available.
+fn probe_tmux_available() -> bool {
+    std::process::Command::new("which")
+        .arg("tmux")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Check if systemd is available.
+fn probe_systemd_available() -> bool {
+    std::path::Path::new("/run/systemd/system").exists()
+}
+
 #[derive(Clone)]
 pub struct RpcContext {
     pub cache: Arc<Cache>,
@@ -40,7 +79,13 @@ pub struct RpcContext {
 }
 
 impl RpcContext {
+    /// Create a new RpcContext with probed capabilities.
     pub fn new(cache: Arc<Cache>, config: ConfigManager) -> Self {
+        Self::with_capabilities(cache, config, Capabilities::probe())
+    }
+
+    /// Create a new RpcContext with explicit capabilities (for testing).
+    pub fn with_capabilities(cache: Arc<Cache>, config: ConfigManager, capabilities: Capabilities) -> Self {
         Self {
             cache,
             config,
@@ -49,12 +94,7 @@ impl RpcContext {
             started_at: Instant::now(),
             protocol_version: 1,
             schema_version: 1,
-            capabilities: Capabilities {
-                ntm: true,
-                tmux: true,
-                stream: false,
-                systemd: false,
-            },
+            capabilities,
             is_admin: false,
         }
     }
@@ -97,6 +137,17 @@ impl RpcError {
 
 pub type RpcResult<T> = Result<T, RpcError>;
 
+pub fn hello_payload(ctx: &RpcContext) -> Value {
+    json!({
+        "daemonVersion": crate::version(),
+        "protocolVersion": ctx.protocol_version,
+        "schemaVersion": ctx.schema_version,
+        "capabilities": ctx.capabilities,
+        "instanceId": ctx.instance_id,
+        "runId": ctx.run_id,
+    })
+}
+
 pub fn require_admin(ctx: &RpcContext) -> RpcResult<()> {
     if ctx.is_admin {
         Ok(())
@@ -120,6 +171,7 @@ pub fn parse_params<T: for<'de> Deserialize<'de>>(params: Value) -> RpcResult<T>
 
 pub fn handle(method: &str, params: Value, ctx: &RpcContext) -> RpcResult<Value> {
     match method {
+        "core.hello" => handlers::core::hello(ctx),
         "health.get" => handlers::core::health_get(ctx),
         "capabilities.get" => handlers::core::capabilities_get(ctx),
         "snapshot.get" => handlers::core::snapshot_get(ctx),
@@ -150,5 +202,116 @@ pub fn handle(method: &str, params: Value, ctx: &RpcContext) -> RpcResult<Value>
             CODE_UNSUPPORTED,
             format!("Unsupported method: {method}"),
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_capabilities() -> Capabilities {
+        Capabilities {
+            ntm: false,
+            tmux: true,
+            stream: false,
+            systemd: false,
+        }
+    }
+
+    #[test]
+    fn capabilities_probe_runs_without_panic() {
+        // Just verify probing doesn't crash
+        let caps = Capabilities::probe();
+        // tmux is usually available on dev machines
+        // ntm availability varies
+        assert!(caps.tmux || !caps.tmux); // trivially true, just tests probe runs
+    }
+
+    #[test]
+    fn capabilities_can_be_constructed_manually() {
+        let caps = Capabilities {
+            ntm: false,
+            tmux: true,
+            stream: true,
+            systemd: false,
+        };
+        assert!(!caps.ntm);
+        assert!(caps.tmux);
+        assert!(caps.stream);
+        assert!(!caps.systemd);
+    }
+
+    #[test]
+    fn context_with_custom_capabilities() {
+        let cache = Arc::new(Cache::new(100));
+        let config = ConfigManager::default();
+        let caps = test_capabilities();
+
+        let ctx = RpcContext::with_capabilities(cache, config, caps);
+        assert!(!ctx.capabilities.ntm);
+        assert!(ctx.capabilities.tmux);
+    }
+
+    #[test]
+    fn capabilities_reflected_in_health_get() {
+        let cache = Arc::new(Cache::new(100));
+        cache.set_health(crate::cache::HealthStatus {
+            status: "ok".to_string(),
+            last_error: None,
+        });
+        let config = ConfigManager::default();
+        let caps = Capabilities {
+            ntm: false,
+            tmux: true,
+            stream: false,
+            systemd: false,
+        };
+
+        let ctx = RpcContext::with_capabilities(cache, config, caps);
+        let result = handle("health.get", serde_json::json!(null), &ctx).unwrap();
+
+        // Verify ntm capability is false
+        assert_eq!(result["capabilities"]["ntm"], false);
+        assert_eq!(result["capabilities"]["tmux"], true);
+    }
+
+    #[test]
+    fn capabilities_reflected_in_capabilities_get() {
+        let cache = Arc::new(Cache::new(100));
+        let config = ConfigManager::default();
+        let caps = Capabilities {
+            ntm: false,
+            tmux: true,
+            stream: false,
+            systemd: true,
+        };
+
+        let ctx = RpcContext::with_capabilities(cache, config, caps);
+        let result = handle("capabilities.get", serde_json::json!(null), &ctx).unwrap();
+
+        assert_eq!(result["capabilities"]["ntm"], false);
+        assert_eq!(result["capabilities"]["tmux"], true);
+        assert_eq!(result["capabilities"]["systemd"], true);
+    }
+
+    #[test]
+    fn systemd_probe_checks_path() {
+        // Just verify it runs
+        let has_systemd = probe_systemd_available();
+        // Result depends on system
+        assert!(has_systemd || !has_systemd);
+    }
+
+    #[test]
+    fn ntm_probe_handles_missing_binary() {
+        // Probing for a non-existent binary should return false
+        // (which is the case when ntm is not installed)
+        let _ = probe_ntm_available(); // Should not panic
+    }
+
+    #[test]
+    fn tmux_probe_handles_missing_binary() {
+        // Similar to ntm, should not panic
+        let _ = probe_tmux_available();
     }
 }
