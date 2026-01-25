@@ -71,7 +71,10 @@ Fill in once Windows tests are executed:
 - TCP with VPN: Pending
 - StdIO baseline: Pending
 
-## Recommendation (Pending)
-- Default transport: **stdio**
-- TCP fallback: **opt-in only** if results confirm stability
-
+## Recommendation (Interim)
+- Default transport: **stdio** (most reliable across WSL configs).
+- TCP fallback: opt-in only. Before enabling, verify connectivity with:
+  ```powershell
+  Test-NetConnection -ComputerName 127.0.0.1 -Port 3847
+  ```
+- If TCP fails after sleep/VPN changes, fall back to stdio and restart WSL.
