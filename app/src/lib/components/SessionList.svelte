@@ -4,6 +4,7 @@
   import { sessions, selectedSessionId, selectSession, pinnedSessionIds, togglePinSession } from '../stores/sessions';
   import SessionCard from './SessionCard.svelte';
   import PaneList from './PaneList.svelte';
+  import EmptyState from './states/EmptyState.svelte';
 
   export let query = '';
   export let dense = false;
@@ -249,19 +250,20 @@
 
   <!-- Sessions list -->
   {#if filteredSessions.length === 0}
-    <div
-      class={`rounded-xl border border-dashed border-slate-800 ${
-        dense ? 'bg-slate-950/60 p-4 text-xs' : 'bg-slate-900/60 p-6 text-sm'
-      } text-slate-400`}
-    >
-      {#if showPinnedOnly}
-        No pinned sessions. Click 📌 on a session to pin it.
-      {:else if statusFilter !== 'all'}
-        No {statusFilter} sessions match your search.
-      {:else}
-        No sessions match your search yet.
-      {/if}
-    </div>
+    <EmptyState
+      icon={showPinnedOnly || statusFilter !== 'all' ? 'search' : 'sessions'}
+      title={showPinnedOnly
+        ? 'No pinned sessions'
+        : statusFilter !== 'all'
+          ? `No ${statusFilter} sessions`
+          : 'No sessions yet'}
+      description={showPinnedOnly
+        ? 'Click 📌 on a session to pin it for quick access.'
+        : statusFilter !== 'all'
+          ? 'Try a different filter or search query.'
+          : 'Sessions will appear here once they connect.'}
+      compact={dense}
+    />
   {:else}
     {#each filteredSessions as session (session.sessionUid)}
       <SessionCard
