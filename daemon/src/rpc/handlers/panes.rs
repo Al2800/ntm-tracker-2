@@ -1,9 +1,11 @@
 use crate::cache::Cache;
 use crate::models::pane::Pane;
+use crate::command::{CommandCategory, CommandConfig, CommandRunner, CommandSpec, CommandError};
 use crate::redaction::default_redactor;
-use crate::rpc::{parse_params, RpcContext, RpcError, RpcResult, CODE_NOT_FOUND};
+use crate::rpc::{parse_params, RpcContext, RpcError, RpcResult, CODE_DEGRADED, CODE_NOT_FOUND};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -78,12 +80,64 @@ pub fn get(ctx: &RpcContext, params: Value) -> RpcResult<Value> {
 
 pub fn output_preview(_ctx: &RpcContext, params: Value) -> RpcResult<Value> {
     let params: PanePreviewParams = parse_params(params)?;
-    let preview = default_redactor().redact("");
+    let max_lines = params.max_lines.unwrap_or(200).max(1);
+    let max_chars = params.max_chars.unwrap_or(64 * 1024).max(1);
+    let command = CommandSpec {
+        program: "tmux".to_string(),
+        args: vec![
+            "capture-pane".to_string(),
+            "-p".to_string(),
+            "-t".to_string(),
+            params.pane_id.clone(),
+            "-S".to_string(),
+            format!("-{}", max_lines),
+        ],
+        timeout: Duration::from_secs(2),
+        max_output_bytes: max_chars,
+        category: CommandCategory::TmuxFast,
+    };
+
+    let runner = CommandRunner::new(CommandConfig::default());
+    let output_result = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.block_on(runner.run(command))
+    } else {
+        let runtime =
+            tokio::runtime::Runtime::new().map_err(|err| RpcError::new(CODE_DEGRADED, err.to_string()))?;
+        runtime.block_on(runner.run(command))
+    };
+
+    let output = output_result.map_err(|err| {
+        let message = match err {
+            CommandError::Timeout => "tmux capture-pane timed out".to_string(),
+            CommandError::CircuitOpen => "tmux command circuit is open".to_string(),
+            other => format!("tmux capture-pane failed: {other:?}"),
+        };
+        RpcError::new(CODE_DEGRADED, message)
+    })?;
+
+    let raw = String::from_utf8_lossy(&output.stdout);
+    let redacted = default_redactor().redact(&raw);
+    let truncated = redacted.len() > max_chars;
+    let content = if truncated {
+        redacted.chars().take(max_chars).collect::<String>()
+    } else {
+        redacted
+    };
+
+    let captured_at = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or(0);
+
+    let line_count = content.lines().count();
+
     Ok(json!({
         "paneId": params.pane_id,
-        "preview": preview,
-        "redacted": true,
-        "maxLines": params.max_lines.unwrap_or(0),
-        "maxChars": params.max_chars.unwrap_or(0)
+        "content": content,
+        "lines": line_count,
+        "bytes": output.stdout.len(),
+        "truncated": truncated,
+        "capturedAt": captured_at,
+        "redacted": true
     }))
 }
