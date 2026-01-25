@@ -13,6 +13,7 @@ spikes/stdio_rpc/target/
 
 # daemon build artifacts
 daemon/target/
+*.snap.new
 
 # beads local runtime files
 .beads/.local_version
