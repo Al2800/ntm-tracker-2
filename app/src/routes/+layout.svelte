@@ -15,6 +15,19 @@
   let unlistenOpenSearch: UnlistenFn | null = null;
   let unsubscribeSettingsReady: (() => void) | null = null;
 
+  const cleanup = () => {
+    unlistenOpenSettings?.();
+    unlistenOpenSettings = null;
+    unlistenOpenSession?.();
+    unlistenOpenSession = null;
+    unlistenOpenSearch?.();
+    unlistenOpenSearch = null;
+    unsubscribeSettingsReady?.();
+    unsubscribeSettingsReady = null;
+    stopNotifications();
+    stopConnectionLoop();
+  };
+
   onMount(() => {
     initSettings();
     startConnectionLoop();
@@ -47,33 +60,10 @@
     }).then((unlisten) => {
       unlistenOpenSearch = unlisten;
     });
-
-    return () => {
-      unlistenOpenSettings?.();
-      unlistenOpenSettings = null;
-      unlistenOpenSession?.();
-      unlistenOpenSession = null;
-      unlistenOpenSearch?.();
-      unlistenOpenSearch = null;
-      unsubscribeSettingsReady?.();
-      unsubscribeSettingsReady = null;
-      stopNotifications();
-      stopConnectionLoop();
-    };
   });
 
-  onDestroy(() => {
-    unlistenOpenSettings?.();
-    unlistenOpenSettings = null;
-    unlistenOpenSession?.();
-    unlistenOpenSession = null;
-    unlistenOpenSearch?.();
-    unlistenOpenSearch = null;
-    unsubscribeSettingsReady?.();
-    unsubscribeSettingsReady = null;
-    stopNotifications();
-    stopConnectionLoop();
-  });
+  // Use onDestroy for cleanup - more reliable than onMount return in Svelte
+  onDestroy(cleanup);
 </script>
 
 <slot />

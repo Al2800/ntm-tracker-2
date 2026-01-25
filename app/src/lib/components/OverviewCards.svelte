@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy, onMount } from 'svelte';
   import { sessions } from '../stores/sessions';
   import { events } from '../stores/events';
   import { dailyStats } from '../stores/stats';
@@ -7,11 +8,32 @@
 
   const normalizeTimestamp = (value: number) => (value < 1_000_000_000_000 ? value * 1000 : value);
 
-  const todayStartMs = (() => {
+  const getTodayStartMs = () => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     return now.getTime();
-  })();
+  };
+
+  // Recalculate at midnight or when stores update
+  let todayStartMs = getTodayStartMs();
+  let midnightTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const scheduleMidnightRefresh = () => {
+    const now = Date.now();
+    const msUntilMidnight = getTodayStartMs() + 24 * 60 * 60 * 1000 - now;
+    midnightTimer = setTimeout(() => {
+      todayStartMs = getTodayStartMs();
+      scheduleMidnightRefresh();
+    }, msUntilMidnight + 1000); // +1s buffer
+  };
+
+  onMount(() => {
+    scheduleMidnightRefresh();
+  });
+
+  onDestroy(() => {
+    if (midnightTimer) clearTimeout(midnightTimer);
+  });
 
   $: sessionCount = $sessions.length;
   $: paneCount = $sessions.reduce((sum, session) => sum + (session.paneCount ?? 0), 0);

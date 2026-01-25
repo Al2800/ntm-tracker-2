@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import type { ConnectionState } from '../types';
 import { daemonHealth, daemonStart } from '../tauri';
 import { settings } from './settings';
@@ -55,10 +55,8 @@ export const startConnectionLoop = () => {
     if (!connectionLoopRunning) return;
     connectionStateStore.update((state) => (state === 'disconnected' ? 'connecting' : state));
 
-    let intervalMs = 5000;
-    settings.subscribe((current) => {
-      intervalMs = current.reconnectIntervalMs;
-    })();
+    // Use get() to read synchronously - no subscription leak
+    const intervalMs = get(settings).reconnectIntervalMs;
 
     try {
       const health = await daemonHealth();

@@ -1,6 +1,9 @@
 import { writable } from 'svelte/store';
 import type { TrackerEvent } from '../types';
 
+/** Maximum number of events to retain in memory to prevent unbounded growth */
+const MAX_EVENTS = 1000;
+
 const eventsStore = writable<TrackerEvent[]>([]);
 const lastEventIdStore = writable<number>(0);
 
@@ -21,6 +24,10 @@ export const appendEvents = (incoming: TrackerEvent[]) =>
     const merged = [...current, ...incoming];
     const maxId = merged.reduce((max, event) => Math.max(max, event.id), 0);
     lastEventIdStore.set(maxId);
+    // Cap the array size to prevent unbounded memory growth
+    if (merged.length > MAX_EVENTS) {
+      return merged.slice(-MAX_EVENTS);
+    }
     return merged;
   });
 

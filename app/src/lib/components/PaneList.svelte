@@ -65,7 +65,7 @@
     <button
       data-pane-button
       type="button"
-      role={selectable ? 'option' : 'listitem'}
+      role={selectable ? 'option' : undefined}
       aria-selected={selectable ? selectedPaneId === pane.paneUid : undefined}
       aria-label="Pane {pane.index}, {paneStatus.label}{pane.agentType ? `, ${pane.agentType}` : ''}"
       class={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-border-focus focus-visible:ring-offset-1 focus-visible:ring-offset-surface-base ${

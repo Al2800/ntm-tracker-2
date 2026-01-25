@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from 'svelte';
+  import { tick } from 'svelte';
   import type { Session } from '../types';
   import { sessions, selectedSessionId, selectSession, pinnedSessionIds, togglePinSession } from '../stores/sessions';
   import SessionCard from './SessionCard.svelte';

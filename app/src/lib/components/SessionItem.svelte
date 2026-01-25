@@ -52,9 +52,10 @@
   }
 </script>
 
-<button
-  type="button"
-  class="session-item group relative w-full rounded-lg border p-2.5 text-left transition-all focus-ring"
+<div
+  role="button"
+  tabindex="0"
+  class="session-item group relative w-full rounded-lg border p-2.5 text-left transition-all focus-ring cursor-pointer"
   class:border-accent={selected}
   class:bg-accent-muted={selected}
   class:border-border={!selected}
@@ -62,10 +63,15 @@
   class:hover:border-border-strong={!selected}
   class:hover:bg-surface-raised={!selected}
   on:click={() => dispatch('select')}
+  on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dispatch('select'); } }}
   on:mouseenter={() => showActions = true}
   on:mouseleave={() => showActions = false}
   on:focus={() => showActions = true}
-  on:blur={() => showActions = false}
+  on:blur={(e) => {
+    // Don't hide if focus moved to a child element (e.g., copy button)
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    showActions = false;
+  }}
   aria-label="Session {session.name}, status {session.status}, {totalCount} pane{totalCount !== 1 ? 's' : ''}"
   aria-pressed={selected}
 >
@@ -118,7 +124,7 @@
       </button>
     </div>
   {/if}
-</button>
+</div>
 
 <style>
   /* CSS containment for scroll performance with large lists */

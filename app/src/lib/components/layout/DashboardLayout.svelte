@@ -75,7 +75,6 @@
         <!-- Right panel (insights) - hidden on smaller screens -->
         <aside
           class="hidden w-80 shrink-0 flex-col border-l border-border bg-surface-raised/30 xl:flex 2xl:w-96"
-          role="complementary"
           aria-label="Activity insights"
         >
           <div class="flex-1 overflow-y-auto p-4">

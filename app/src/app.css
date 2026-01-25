@@ -180,9 +180,7 @@
   .status-dot-neutral {
     @apply bg-status-neutral;
   }
-  .status-dot-pulse {
-    @apply animate-pulse-slow;
-  }
+  /* Note: .status-dot-pulse animation is defined in MOTION section below */
 
   /*
    * ──────────────────────────────────────────────────────────────────────────
@@ -309,12 +307,10 @@
     box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
   }
 
-  /* Interactive card with all effects */
-  .card-interactive {
-    @apply transition-all duration-200 ease-out;
-  }
+  /* Note: .card-interactive base styles are in CARD INTERACTIVE STATES section above.
+     Focus states are in ACCESSIBILITY UTILITIES section.
+     This section just adds the subtle lift transform. */
   .card-interactive:hover {
-    @apply border-border-strong shadow-elevation-1;
     transform: translateY(-1px);
   }
   .card-interactive:active {

@@ -210,9 +210,10 @@ export const ESCALATION_SEVERITY: Record<EscalationSeverity, {
 
 // =============================================================================
 // EVENT TYPE
+// Matches TrackerEvent.type from types.ts
 // =============================================================================
 
-export type EventType = 'compact' | 'escalation' | 'status_change' | 'session_start' | 'session_end';
+export type EventType = 'compact' | 'escalation' | 'pane.status' | 'session.status';
 
 export const EVENT_TYPE: Record<EventType, {
   label: string;
@@ -232,23 +233,17 @@ export const EVENT_TYPE: Record<EventType, {
     icon: '⚠️',
     description: 'Human attention required',
   },
-  status_change: {
-    label: 'Status',
+  'pane.status': {
+    label: 'Pane',
     badge: 'badge-info',
-    icon: '🔄',
+    icon: '📋',
     description: 'Pane status changed',
   },
-  session_start: {
-    label: 'Started',
-    badge: 'badge-success',
-    icon: '▶️',
-    description: 'Session started',
-  },
-  session_end: {
-    label: 'Ended',
-    badge: 'badge-neutral',
-    icon: '⏹️',
-    description: 'Session ended',
+  'session.status': {
+    label: 'Session',
+    badge: 'badge-info',
+    icon: '🔄',
+    description: 'Session status changed',
   },
 };
 
@@ -285,10 +280,10 @@ export function getEscalationSeverity(severity: string): typeof ESCALATION_SEVER
 }
 
 /**
- * Get event type config with fallback to status_change
+ * Get event type config with fallback to pane.status
  */
 export function getEventType(type: string): typeof EVENT_TYPE[EventType] {
-  return EVENT_TYPE[type as EventType] ?? EVENT_TYPE.status_change;
+  return EVENT_TYPE[type as EventType] ?? EVENT_TYPE['pane.status'];
 }
 
 /**
