@@ -21,7 +21,7 @@ impl AgentType {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "claude" => AgentType::Claude,
             "codex" => AgentType::Codex,
@@ -178,17 +178,16 @@ fn strip_ansi(input: &str) -> String {
     let mut output = String::with_capacity(input.len());
     let mut chars = input.chars().peekable();
     while let Some(ch) = chars.next() {
-        if ch == '\u{1b}' {
-            if matches!(chars.peek(), Some('[')) {
+        if ch == '\u{1b}'
+            && matches!(chars.peek(), Some('[')) {
                 chars.next();
-                while let Some(next) = chars.next() {
+                for next in chars.by_ref() {
                     if next.is_ascii_alphabetic() {
                         break;
                     }
                 }
                 continue;
             }
-        }
         output.push(ch);
     }
     output
@@ -339,13 +338,13 @@ mod tests {
     }
 
     #[test]
-    fn agent_type_from_str() {
-        assert_eq!(AgentType::from_str("claude"), AgentType::Claude);
-        assert_eq!(AgentType::from_str("CLAUDE"), AgentType::Claude);
-        assert_eq!(AgentType::from_str("codex"), AgentType::Codex);
-        assert_eq!(AgentType::from_str("gemini"), AgentType::Gemini);
-        assert_eq!(AgentType::from_str("shell"), AgentType::Shell);
-        assert_eq!(AgentType::from_str("anything"), AgentType::Unknown);
+    fn agent_type_parse() {
+        assert_eq!(AgentType::parse("claude"), AgentType::Claude);
+        assert_eq!(AgentType::parse("CLAUDE"), AgentType::Claude);
+        assert_eq!(AgentType::parse("codex"), AgentType::Codex);
+        assert_eq!(AgentType::parse("gemini"), AgentType::Gemini);
+        assert_eq!(AgentType::parse("shell"), AgentType::Shell);
+        assert_eq!(AgentType::parse("anything"), AgentType::Unknown);
     }
 
     #[test]

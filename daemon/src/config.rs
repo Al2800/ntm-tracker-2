@@ -58,45 +58,27 @@ impl Default for PollingConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
+#[derive(Default)]
 pub struct CaptureConfig {
     pub capture_output: bool,
 }
 
-impl Default for CaptureConfig {
-    fn default() -> Self {
-        Self {
-            capture_output: false,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
+#[derive(Default)]
 pub struct SecurityConfig {
     pub admin_token_path: Option<PathBuf>,
 }
 
-impl Default for SecurityConfig {
-    fn default() -> Self {
-        Self {
-            admin_token_path: None,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
+#[derive(Default)]
 pub struct PrivacyConfig {
     pub redaction_patterns: Vec<String>,
 }
 
-impl Default for PrivacyConfig {
-    fn default() -> Self {
-        Self {
-            redaction_patterns: Vec::new(),
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
@@ -157,6 +139,7 @@ impl Default for MaintenanceConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
+#[derive(Default)]
 pub struct DaemonConfig {
     pub server: ServerConfig,
     pub polling: PollingConfig,
@@ -167,19 +150,6 @@ pub struct DaemonConfig {
     pub maintenance: MaintenanceConfig,
 }
 
-impl Default for DaemonConfig {
-    fn default() -> Self {
-        Self {
-            server: ServerConfig::default(),
-            polling: PollingConfig::default(),
-            capture: CaptureConfig::default(),
-            security: SecurityConfig::default(),
-            privacy: PrivacyConfig::default(),
-            logging: LoggingConfig::default(),
-            maintenance: MaintenanceConfig::default(),
-        }
-    }
-}
 
 impl DaemonConfig {
     pub fn from_toml_str(raw: &str) -> Result<Self, ConfigError> {

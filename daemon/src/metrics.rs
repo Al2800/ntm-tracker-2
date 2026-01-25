@@ -114,6 +114,12 @@ pub struct Metrics {
     pub rpc_request: Histogram,
 }
 
+impl Default for Metrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Metrics {
     pub const fn new() -> Self {
         Self {

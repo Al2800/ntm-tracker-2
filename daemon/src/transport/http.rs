@@ -109,11 +109,19 @@ impl HttpServer {
         }
 
         // Extract auth token from headers
-        let is_admin = self.extract_auth(headers);
+        let is_admin = match self.extract_auth(headers) {
+            Some(is_admin) => is_admin,
+            None => {
+                let response =
+                    http_response(401, "Unauthorized", "Missing or invalid bearer token");
+                stream.write_all(response.as_bytes()).await?;
+                return Ok(());
+            }
+        };
 
         // Create context with auth status
         let mut client_ctx = (*ctx).clone();
-        client_ctx.is_admin = is_admin.unwrap_or(false);
+        client_ctx.is_admin = is_admin;
 
         // Process JSON-RPC request
         let response = self.process_request(body, &client_ctx);
@@ -175,7 +183,7 @@ impl HttpServer {
         // Look for Authorization: Bearer <token>
         for line in headers.lines() {
             if line.to_lowercase().starts_with("authorization:") {
-                let value = line.splitn(2, ':').nth(1)?.trim();
+                let value = line.split_once(':')?.1.trim();
                 if value.to_lowercase().starts_with("bearer ") {
                     let token = value[7..].trim();
                     return self.authenticate(token);
@@ -275,5 +283,24 @@ mod tests {
         assert_eq!(server.authenticate("admin123"), Some(true));
         assert_eq!(server.authenticate("user456"), Some(false));
         assert_eq!(server.authenticate("invalid"), None);
+    }
+
+    #[test]
+    fn extract_auth_requires_token_when_configured() {
+        let config = HttpConfig {
+            port: 3848,
+            admin_token: Some("admin123".to_string()),
+            tokens: vec!["user456".to_string()],
+        };
+        let server = HttpServer::new(config);
+        let headers = "POST /rpc HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        assert_eq!(server.extract_auth(headers), None);
+    }
+
+    #[test]
+    fn extract_auth_allows_when_unconfigured() {
+        let server = HttpServer::new(HttpConfig::default());
+        let headers = "POST /rpc HTTP/1.1\r\nHost: localhost\r\n\r\n";
+        assert_eq!(server.extract_auth(headers), Some(false));
     }
 }

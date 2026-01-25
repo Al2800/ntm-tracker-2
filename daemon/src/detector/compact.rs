@@ -134,17 +134,16 @@ fn strip_ansi(input: &str) -> String {
     let mut output = String::with_capacity(input.len());
     let mut chars = input.chars().peekable();
     while let Some(ch) = chars.next() {
-        if ch == '\u{1b}' {
-            if matches!(chars.peek(), Some('[')) {
+        if ch == '\u{1b}'
+            && matches!(chars.peek(), Some('[')) {
                 chars.next();
-                while let Some(next) = chars.next() {
+                for next in chars.by_ref() {
                     if next.is_ascii_alphabetic() {
                         break;
                     }
                 }
                 continue;
             }
-        }
         output.push(ch);
     }
     output

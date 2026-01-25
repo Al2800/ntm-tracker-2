@@ -64,7 +64,7 @@ impl TraySummary {
             String::new()
         };
         format!(
-            "{} sessions, {} panes active{}\\n{} compacts today | {:.1}h usage\\ndaemon: {} | last: {}s",
+            "{} sessions, {} panes active{}\n{} compacts today | {:.1}h usage\ndaemon: {} | last: {}s",
             self.sessions,
             self.active_panes,
             alert_line,

@@ -2,7 +2,7 @@ use crate::metrics::METRICS;
 use std::collections::HashMap;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
 use tokio::sync::{Mutex, Semaphore};
 
@@ -61,24 +61,22 @@ pub enum CommandError {
     CircuitOpen,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 struct BreakerState {
     consecutive_failures: u32,
     backoff_until: Option<Instant>,
 }
 
-impl Default for BreakerState {
-    fn default() -> Self {
-        Self {
-            consecutive_failures: 0,
-            backoff_until: None,
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct CircuitBreaker {
     states: Mutex<HashMap<CommandCategory, BreakerState>>,
+}
+
+impl Default for CircuitBreaker {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CircuitBreaker {
@@ -119,7 +117,8 @@ impl CircuitBreaker {
         }
 
         if state.consecutive_failures >= 3 {
-            let backoff_secs = 2_u64.pow(state.consecutive_failures.saturating_sub(3));
+            let exponent = state.consecutive_failures.saturating_sub(3);
+            let backoff_secs = 2_u64.checked_pow(exponent).unwrap_or(u64::MAX);
             let backoff = Duration::from_secs(backoff_secs.min(60));
             state.backoff_until = Some(Instant::now() + backoff);
         }
@@ -193,12 +192,15 @@ impl CommandRunner {
                 }
             }
             Ok(Err(err)) => {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
                 record_metrics(spec.category, start.elapsed());
                 self.breaker.record_failure(spec.category).await?;
                 Err(err)
             }
             Err(_) => {
                 let _ = child.kill().await;
+                let _ = child.wait().await;
                 record_metrics(spec.category, start.elapsed());
                 self.breaker.record_failure(spec.category).await?;
                 Err(CommandError::Timeout)
@@ -227,7 +229,10 @@ fn record_metrics(category: CommandCategory, duration: Duration) {
     }
 }
 
-async fn read_limited<R: AsyncReadExt + Unpin>(mut reader: R, max_bytes: usize) -> Result<Vec<u8>, CommandError> {
+async fn read_limited<R: AsyncRead + Unpin>(
+    mut reader: R,
+    max_bytes: usize,
+) -> Result<Vec<u8>, CommandError> {
     let mut buffer = Vec::new();
     let mut chunk = [0u8; 4096];
     loop {

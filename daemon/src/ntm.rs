@@ -59,7 +59,7 @@ impl NtmClient {
             .runner
             .run(spec)
             .await
-            .map_err(|err| map_command_error(err))?;
+            .map_err(map_command_error)?;
         let text = String::from_utf8_lossy(&output.stdout);
         parse_ntm_markdown(&text).map_err(|err| NtmError::ParseFailed(err.reason))
     }
@@ -82,7 +82,7 @@ impl NtmClient {
             .runner
             .run(spec)
             .await
-            .map_err(|err| map_command_error(err))?;
+            .map_err(map_command_error)?;
         let text = String::from_utf8_lossy(&output.stdout);
         parse_ntm_tail(&text).map_err(|err| NtmError::ParseFailed(err.reason))
     }
@@ -99,7 +99,7 @@ impl NtmClient {
             .runner
             .run(spec)
             .await
-            .map_err(|err| map_command_error(err))?;
+            .map_err(map_command_error)?;
         let text = String::from_utf8_lossy(&output.stdout);
         Ok(parse_session_lines(&text))
     }

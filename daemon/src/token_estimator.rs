@@ -1,7 +1,7 @@
-/// Token count estimation for context tracking.
-///
-/// Uses character-based heuristics to estimate token counts for AI context windows.
-/// The estimations are approximate but useful for tracking context usage.
+//! Token count estimation for context tracking.
+//!
+//! Uses character-based heuristics to estimate token counts for AI context windows.
+//! The estimations are approximate but useful for tracking context usage.
 
 /// Ratio of characters to tokens for English text.
 const CHARS_PER_TOKEN_TEXT: f64 = 4.0;

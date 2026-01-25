@@ -71,10 +71,7 @@ impl EscalationDetector {
         }
 
         let lowered = input.line.to_lowercase();
-        let (severity, confidence, message) = match escalation_match(&lowered) {
-            Some(match_info) => match_info,
-            None => return None,
-        };
+        let (severity, confidence, message) = escalation_match(&lowered)?;
 
         let event = EscalationEvent {
             pane_uid: input.pane_uid.to_string(),
