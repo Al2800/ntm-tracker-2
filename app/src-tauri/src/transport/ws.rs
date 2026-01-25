@@ -31,10 +31,10 @@ impl WsTransport {
             .map_err(|err| format!("Failed to serialize JSON-RPC request: {err}"))?;
 
         let (mut socket, _) =
-            connect(self.url.clone()).map_err(|err| format!("WS connect failed: {err}"))?;
+            connect(self.url.as_str()).map_err(|err| format!("WS connect failed: {err}"))?;
 
         socket
-            .send(Message::Text(payload))
+            .send(Message::Text(payload.into()))
             .map_err(|err| format!("WS send failed: {err}"))?;
 
         let started = Instant::now();
@@ -48,7 +48,7 @@ impl WsTransport {
                 .map_err(|err| format!("WS read failed: {err}"))?;
 
             let text = match msg {
-                Message::Text(text) => text,
+                Message::Text(text) => text.to_string(),
                 Message::Binary(bytes) => String::from_utf8_lossy(&bytes).to_string(),
                 _ => continue,
             };
