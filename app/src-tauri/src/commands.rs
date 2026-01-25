@@ -100,10 +100,17 @@ pub async fn daemon_start(_app: AppHandle, state: State<'_, AppState>) -> Result
         }
     }
 
-    let manager = DaemonManager::start(&guard.settings.transport)?;
-    guard.manager = Some(manager);
-    guard.last_error = None;
-    Ok(())
+    match DaemonManager::start(&guard.settings.transport) {
+        Ok(manager) => {
+            guard.manager = Some(manager);
+            guard.last_error = None;
+            Ok(())
+        }
+        Err(err) => {
+            guard.last_error = Some(err.clone());
+            Err(err)
+        }
+    }
 }
 
 #[tauri::command]
@@ -124,7 +131,7 @@ pub async fn daemon_health(
     _app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<HealthResponse, String> {
-    let guard = state
+    let mut guard = state
         .0
         .lock()
         .map_err(|_| "App state lock poisoned".to_string())?;
@@ -136,8 +143,13 @@ pub async fn daemon_health(
         });
     };
 
+    let running = manager.is_running();
+    if !running && guard.last_error.is_none() {
+        guard.last_error = Some("Daemon process is not running".to_string());
+    }
+
     Ok(HealthResponse {
-        status: if manager.is_running() {
+        status: if running {
             "running".to_string()
         } else {
             "error".to_string()
@@ -158,9 +170,11 @@ pub async fn rpc_call(
         .lock()
         .map_err(|_| "App state lock poisoned".to_string())?;
     let Some(manager) = guard.manager.as_ref() else {
+        guard.last_error = Some("Daemon is not running".to_string());
         return Err("Daemon is not running".to_string());
     };
     if !manager.is_running() {
+        guard.last_error = Some("Daemon health check failed".to_string());
         return Err("Daemon health check failed".to_string());
     }
 

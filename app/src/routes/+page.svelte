@@ -2,8 +2,24 @@
   <title>NTM Tracker</title>
 </svelte:head>
 
+<script lang="ts">
+  import { connectionState, lastConnectionError } from '$lib/stores/connection';
+</script>
+
 <main class="min-h-screen bg-slate-950 text-slate-100">
   <div class="mx-auto max-w-5xl px-6 py-16">
+    {#if $connectionState !== 'connected'}
+      <div class="mb-6 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+        <div class="flex items-center justify-between gap-3">
+          <span class="font-semibold text-amber-200">
+            Connection: {$connectionState}
+          </span>
+          {#if $lastConnectionError}
+            <span class="text-amber-100/80">{$lastConnectionError}</span>
+          {/if}
+        </div>
+      </div>
+    {/if}
     <p class="text-sm uppercase tracking-[0.3em] text-slate-400">NTM Tracker</p>
     <h1 class="mt-4 text-4xl font-semibold text-white">
       System tray telemetry for your NTM sessions

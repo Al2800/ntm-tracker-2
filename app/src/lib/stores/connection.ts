@@ -5,6 +5,7 @@ import { settings } from './settings';
 
 const connectionStateStore = writable<ConnectionState>('disconnected');
 const lastHealthCheckStore = writable<Date | null>(null);
+const lastErrorStore = writable<string | null>(null);
 
 export const connectionState = {
   subscribe: connectionStateStore.subscribe,
@@ -18,8 +19,15 @@ export const lastHealthCheck = {
   update: lastHealthCheckStore.update
 };
 
+export const lastConnectionError = {
+  subscribe: lastErrorStore.subscribe,
+  set: lastErrorStore.set,
+  update: lastErrorStore.update
+};
+
 export const setConnectionState = (state: ConnectionState) => connectionStateStore.set(state);
 export const setLastHealthCheck = (timestamp: Date | null) => lastHealthCheckStore.set(timestamp);
+export const setLastConnectionError = (message: string | null) => lastErrorStore.set(message);
 
 let connectionLoopRunning = false;
 let reconnectAttempt = 0;
@@ -56,15 +64,24 @@ export const startConnectionLoop = () => {
       if (health.status === 'running') {
         reconnectAttempt = 0;
         connectionStateStore.set('connected');
+        lastErrorStore.set(null);
         scheduleNext(intervalMs, tick);
         return;
       }
 
+      if (health.lastError) {
+        lastErrorStore.set(health.lastError);
+      } else {
+        lastErrorStore.set('Daemon is not running');
+      }
       connectionStateStore.set('reconnecting');
       await daemonStart();
       reconnectAttempt += 1;
       scheduleNext(backoffMs(intervalMs), tick);
-    } catch {
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : error ? String(error) : 'Unable to reach daemon';
+      lastErrorStore.set(message);
       connectionStateStore.set('reconnecting');
       reconnectAttempt += 1;
       scheduleNext(backoffMs(intervalMs), tick);
@@ -81,4 +98,5 @@ export const stopConnectionLoop = () => {
   timeoutHandle = null;
   connectionStateStore.set('disconnected');
   lastHealthCheckStore.set(null);
+  lastErrorStore.set(null);
 };
