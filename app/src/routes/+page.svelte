@@ -6,12 +6,15 @@
   import { page } from '$app/stores';
   import { connectionState, lastConnectionError } from '$lib/stores/connection';
   import { sessions, selectedSession, selectSession } from '$lib/stores/sessions';
+  import OutputPreview from '$lib/components/OutputPreview.svelte';
   import type { Session } from '$lib/types';
   import { onDestroy, onMount, tick } from 'svelte';
 
   let query = '';
   let searchInput: HTMLInputElement | null = null;
   let mounted = false;
+  let selectedPaneId: string | null = null;
+  let lastSelectedSessionId: string | null = null;
 
   const isSubsequence = (needle: string, haystack: string) => {
     let needleIndex = 0;
@@ -41,6 +44,11 @@
   $: focusRequested = $page.url.searchParams.get('focusSearch') === '1';
   $: if (mounted && focusRequested) {
     void tick().then(() => searchInput?.focus());
+  }
+
+  $: if (($selectedSession?.sessionUid ?? null) !== lastSelectedSessionId) {
+    lastSelectedSessionId = $selectedSession?.sessionUid ?? null;
+    selectedPaneId = null;
   }
 
   onMount(() => {
@@ -147,25 +155,73 @@
         {/if}
       </div>
 
-      {#if $selectedSession}
-        <div class="mt-6 rounded-lg border border-slate-800 bg-slate-950/40 p-4">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm uppercase tracking-[0.2em] text-slate-400">Selected</p>
+	      {#if $selectedSession}
+	        <div class="mt-6 rounded-lg border border-slate-800 bg-slate-950/40 p-4">
+	          <div class="flex items-center justify-between">
+	            <div>
+	              <p class="text-sm uppercase tracking-[0.2em] text-slate-400">Selected</p>
               <p class="mt-2 text-xl font-semibold text-white">
                 {$selectedSession.name ?? $selectedSession.sessionUid}
               </p>
               <p class="mt-1 text-xs text-slate-400">{$selectedSession.sessionUid}</p>
-            </div>
-            <button
-              class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm hover:bg-slate-800"
-              on:click={() => selectSession(null)}
-            >
-              Clear
-            </button>
-          </div>
-        </div>
-      {/if}
-    </section>
-  </div>
+	            </div>
+	            <button
+	              class="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm hover:bg-slate-800"
+	              on:click={() => {
+	                selectSession(null);
+	                selectedPaneId = null;
+	              }}
+	            >
+	              Clear
+	            </button>
+	          </div>
+
+	          <div class="mt-4">
+	            <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Panes</p>
+	            {#if ($selectedSession.panes ?? []).length === 0}
+	              <p class="mt-2 text-sm text-slate-300/80">
+	                No pane details available yet for this session.
+	              </p>
+	            {:else}
+	              <div class="mt-3 grid gap-2 sm:grid-cols-2">
+	                {#each ($selectedSession.panes ?? []) as pane (pane.paneUid)}
+	                  <button
+	                    class={`rounded-lg border px-3 py-2 text-left text-sm hover:bg-slate-950/60 ${
+	                      selectedPaneId === pane.paneUid
+	                        ? 'border-sky-500/60 bg-sky-500/10'
+	                        : 'border-slate-800 bg-slate-950/40'
+	                    }`}
+	                    on:click={() => (selectedPaneId = pane.paneUid)}
+	                  >
+	                    <div class="flex items-center justify-between gap-2">
+	                      <span class="font-semibold text-white">Pane {pane.index}</span>
+	                      <span class="rounded-full bg-slate-800 px-2 py-0.5 text-xs text-slate-200">
+	                        {pane.status}
+	                      </span>
+	                    </div>
+	                    <div class="mt-1 text-xs text-slate-400">
+	                      {#if pane.agentType}
+	                        <span class="uppercase tracking-[0.2em]">{pane.agentType}</span>
+	                        <span class="mx-2 text-slate-600">·</span>
+	                      {/if}
+	                      <span class="font-mono">{pane.paneUid}</span>
+	                    </div>
+	                    {#if pane.currentCommand}
+	                      <div class="mt-1 text-xs text-slate-300/80">cmd: {pane.currentCommand}</div>
+	                    {/if}
+	                  </button>
+	                {/each}
+	              </div>
+
+	              {#if selectedPaneId}
+	                <div class="mt-4">
+	                  <OutputPreview paneId={selectedPaneId} />
+	                </div>
+	              {/if}
+	            {/if}
+	          </div>
+	        </div>
+	      {/if}
+	    </section>
+	  </div>
 </main>
