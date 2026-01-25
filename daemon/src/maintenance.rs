@@ -269,7 +269,8 @@ pub fn rollup_day(conn: &Connection, day_start: i64, tz_offset_min: i64) -> rusq
         WHERE pane_minute_samples.minute_start >= ?1
           AND pane_minute_samples.minute_start < (?1 + 86_400)
         GROUP BY panes.session_uid
-        ON CONFLICT(day_start, tz_offset_min, session_uid) DO UPDATE SET
+        ON CONFLICT(day_start, session_uid) DO UPDATE SET
+          tz_offset_min = excluded.tz_offset_min,
           active_minutes = excluded.active_minutes,
           estimated_tokens = excluded.estimated_tokens;
         "#,
@@ -287,10 +288,9 @@ pub fn rollup_day(conn: &Connection, day_start: i64, tz_offset_min: i64) -> rusq
               AND events.detected_at >= ?1
               AND events.detected_at < (?1 + 86_400)
         )
-        WHERE daily_stats.day_start = ?1
-          AND daily_stats.tz_offset_min = ?2;
+        WHERE daily_stats.day_start = ?1;
         "#,
-        params![day_start, tz_offset_min],
+        [day_start],
     )?;
 
     Ok(())
@@ -481,7 +481,7 @@ mod tests {
             ..MaintenanceConfig::default()
         };
 
-        let summary = enforce_retention(&conn, 10_000, &config).unwrap();
+        let summary = enforce_retention(&conn, 200_000, &config).unwrap();
 
         assert_eq!(summary.minute_samples_deleted, 1);
         assert_eq!(summary.events_deleted, 1);
