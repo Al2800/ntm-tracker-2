@@ -73,8 +73,27 @@ impl MaintenanceRunner {
         loop {
             tokio::select! {
                 _ = ticker.tick() => {
-                    if let Err(err) = self.run_once() {
-                        warn!(error = %err, "maintenance cycle failed");
+                    let db_path = self.db_path.clone();
+                    let config = self.config.clone();
+                    let tz_offset_min = self.tz_offset_min;
+
+                    let result = tokio::task::spawn_blocking(move || {
+                        let runner = MaintenanceRunner {
+                            db_path,
+                            config,
+                            tz_offset_min,
+                        };
+                        runner.run_once()
+                    }).await;
+
+                    match result {
+                        Ok(Ok(_summary)) => {}
+                        Ok(Err(err)) => {
+                            warn!(error = %err, "maintenance cycle failed");
+                        }
+                        Err(err) => {
+                            warn!(error = %err, "maintenance task panicked");
+                        }
                     }
                 }
                 _ = shutdown.recv() => {
