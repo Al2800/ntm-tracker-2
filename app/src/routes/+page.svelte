@@ -10,6 +10,7 @@
   import { events } from '$lib/stores/events';
   import { sessions, selectedSession, selectSession } from '$lib/stores/sessions';
   import { settings, updateSettings } from '$lib/stores/settings';
+  import { getConnectionStatus, getSessionStatus, sortBySessionStatus } from '$lib/status';
   import OverviewCards from '$lib/components/OverviewCards.svelte';
   import SessionList from '$lib/components/SessionList.svelte';
   import PaneList from '$lib/components/PaneList.svelte';
@@ -24,28 +25,8 @@
   let selectedPaneId: string | null = null;
   let lastSelectedSessionId: string | null = null;
 
-  const connectionLabel: Record<string, string> = {
-    connected: 'Connected',
-    connecting: 'Connecting',
-    reconnecting: 'Reconnecting',
-    degraded: 'Degraded',
-    disconnected: 'Disconnected'
-  };
-
-  const connectionBadge: Record<string, string> = {
-    connected: 'bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-400/40',
-    connecting: 'bg-sky-500/15 text-sky-200 ring-1 ring-sky-400/40',
-    reconnecting: 'bg-amber-500/15 text-amber-200 ring-1 ring-amber-400/40',
-    degraded: 'bg-rose-500/15 text-rose-200 ring-1 ring-rose-400/40',
-    disconnected: 'bg-slate-500/15 text-slate-200 ring-1 ring-slate-500/40'
-  };
-
-  const statusRank: Record<string, number> = {
-    active: 0,
-    idle: 1,
-    ended: 2,
-    unknown: 3
-  };
+  // Use centralized status system
+  $: connectionStatus = getConnectionStatus($connectionState);
 
   const formatQuietHours = (start: number, end: number) => `${start.toString().padStart(2, '0')}:00–${end.toString().padStart(2, '0')}:00`;
 
@@ -64,9 +45,11 @@
     selectedPaneId = null;
   }
 
-  $: sortedSessions = [...$sessions].sort((a, b) => {
-    const rank = (session: typeof a) => statusRank[session.status] ?? 4;
-    if (rank(a) !== rank(b)) return rank(a) - rank(b);
+  $: sortedSessions = sortBySessionStatus($sessions).sort((a, b) => {
+    // Secondary sort by name within same status
+    const rankA = getSessionStatus(a.status).rank;
+    const rankB = getSessionStatus(b.status).rank;
+    if (rankA !== rankB) return 0; // Already sorted by status
     return a.name.localeCompare(b.name);
   });
 
@@ -172,10 +155,10 @@
       </section>
     {:else}
       <!-- Compact mode header: minimal status bar -->
-      <div class="flex items-center justify-between rounded-lg border border-slate-800/80 bg-slate-900/60 px-3 py-2">
-        <span class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">NTM Tracker</span>
-        <span class={`rounded-full px-2 py-0.5 text-[10px] ${connectionBadge[$connectionState]}`}>
-          {connectionLabel[$connectionState]}
+      <div class="tray-item">
+        <span class="label-sm">NTM Tracker</span>
+        <span class="badge {connectionStatus.badge} text-[10px] px-2 py-0.5">
+          {connectionStatus.label}
         </span>
       </div>
     {/if}
@@ -205,14 +188,17 @@
             <button
               class="text-[10px] text-sky-400 hover:text-sky-300"
               type="button"
-              on:click={() => {
-                if (typeof window !== 'undefined' && window.__TAURI__) {
-                  window.__TAURI__.window.getCurrent().hide();
-                }
-                const main = window.__TAURI__?.window.WebviewWindow.getByLabel('main');
-                if (main) {
-                  main.show();
-                  main.setFocus();
+              on:click={async () => {
+                try {
+                  const { getCurrentWindow, Window } = await import('@tauri-apps/api/window');
+                  await getCurrentWindow().hide();
+                  const main = await Window.getByLabel('main');
+                  if (main) {
+                    await main.show();
+                    await main.setFocus();
+                  }
+                } catch {
+                  goto('/');
                 }
               }}
             >

@@ -3,6 +3,19 @@ import type { Session } from '../types';
 
 const sessionsStore = writable<Session[]>([]);
 const selectedSessionIdStore = writable<string | null>(null);
+const pinnedSessionIdsStore = writable<Set<string>>(new Set());
+
+// Load pinned sessions from localStorage
+if (typeof window !== 'undefined') {
+  try {
+    const stored = localStorage.getItem('ntm-pinned-sessions');
+    if (stored) {
+      pinnedSessionIdsStore.set(new Set(JSON.parse(stored)));
+    }
+  } catch {
+    // Ignore localStorage errors
+  }
+}
 
 export const sessions = {
   subscribe: sessionsStore.subscribe,
@@ -14,6 +27,10 @@ export const selectedSessionId = {
   subscribe: selectedSessionIdStore.subscribe,
   set: selectedSessionIdStore.set,
   update: selectedSessionIdStore.update
+};
+
+export const pinnedSessionIds = {
+  subscribe: pinnedSessionIdsStore.subscribe
 };
 
 export const selectedSession = derived(
@@ -35,3 +52,23 @@ export const upsertSession = (session: Session) =>
   });
 
 export const selectSession = (sessionUid: string | null) => selectedSessionIdStore.set(sessionUid);
+
+export const togglePinSession = (sessionUid: string) => {
+  pinnedSessionIdsStore.update((current) => {
+    const next = new Set(current);
+    if (next.has(sessionUid)) {
+      next.delete(sessionUid);
+    } else {
+      next.add(sessionUid);
+    }
+    // Persist to localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('ntm-pinned-sessions', JSON.stringify([...next]));
+      } catch {
+        // Ignore localStorage errors
+      }
+    }
+    return next;
+  });
+};

@@ -5,8 +5,17 @@
   export let session: Session;
   export let expanded = false;
   export let dense = false;
+  export let pinned = false;
 
-  const dispatch = createEventDispatcher<{ toggle: { sessionUid: string } }>();
+  const dispatch = createEventDispatcher<{
+    toggle: { sessionUid: string };
+    pin: { sessionUid: string };
+  }>();
+
+  const handlePin = (e: Event) => {
+    e.stopPropagation();
+    dispatch('pin', { sessionUid: session.sessionUid });
+  };
 
   const statusClasses: Record<Session['status'], string> = {
     active: 'bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-400/40',
@@ -41,17 +50,19 @@
 </script>
 
 <div
-  class={`group relative overflow-hidden rounded-2xl border border-slate-800/80 bg-slate-900/60 ${
-    dense ? 'p-3' : 'p-4'
-  }`}
+  class={`group relative overflow-hidden rounded-2xl border bg-slate-900/60 ${
+    pinned ? 'border-sky-500/40 ring-1 ring-sky-500/20' : 'border-slate-800/80'
+  } ${dense ? 'p-3' : 'p-4'}`}
 >
   <div class="pointer-events-none absolute inset-0 bg-gradient-to-br from-sky-500/10 via-transparent to-emerald-500/10 opacity-0 transition group-hover:opacity-100"></div>
-  <button
-    type="button"
-    class="relative flex w-full flex-wrap items-center justify-between gap-4 text-left"
-    on:click={() => dispatch('toggle', { sessionUid: session.sessionUid })}
-  >
-    <div class="flex items-center gap-3">
+  <!-- Header row with toggle area and actions -->
+  <div class="relative flex w-full flex-wrap items-center justify-between gap-4">
+    <!-- Clickable toggle area -->
+    <button
+      type="button"
+      class="flex flex-1 items-center gap-3 text-left"
+      on:click={() => dispatch('toggle', { sessionUid: session.sessionUid })}
+    >
       <div
         class={`flex h-10 w-10 items-center justify-center rounded-xl border border-slate-700/70 bg-slate-950/60 ${
           dense ? 'h-9 w-9' : ''
@@ -67,8 +78,20 @@
           Session · {session.sessionUid.slice(0, 8)}
         </p>
       </div>
-    </div>
-    <div class="flex items-center gap-3 text-xs text-slate-400">
+    </button>
+    <!-- Actions and status (not inside toggle button) -->
+    <div class="flex items-center gap-2 text-xs text-slate-400">
+      <!-- Pin button -->
+      <button
+        type="button"
+        class={`rounded p-1 transition hover:bg-slate-800/60 ${
+          pinned ? 'text-sky-400' : 'text-slate-500 opacity-0 group-hover:opacity-100'
+        }`}
+        title={pinned ? 'Unpin session' : 'Pin session'}
+        on:click={handlePin}
+      >
+        📌
+      </button>
       <span class={`rounded-full px-2.5 py-1 ${statusClasses[session.status]}`}>
         {session.status}
       </span>
@@ -76,9 +99,16 @@
       {#if lastSeen}
         <span class="hidden sm:inline">Seen {lastSeen}</span>
       {/if}
-      <span class="text-lg text-slate-500">{expanded ? '▾' : '▸'}</span>
+      <!-- Expand/collapse toggle -->
+      <button
+        type="button"
+        class="text-lg text-slate-500 hover:text-slate-300 p-1"
+        on:click={() => dispatch('toggle', { sessionUid: session.sessionUid })}
+      >
+        {expanded ? '▾' : '▸'}
+      </button>
     </div>
-  </button>
+  </div>
 
   <div class={`relative mt-3 grid gap-2 text-xs text-slate-300 ${dense ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
     <div class="rounded-lg border border-slate-800/80 bg-slate-950/50 px-3 py-2">
