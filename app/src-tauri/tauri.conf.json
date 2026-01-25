@@ -28,8 +28,7 @@
     "targets": ["msi"],
     "windows": {
       "wix": {
-        "language": "en-US",
-        "license": "LICENSE.rtf"
+        "language": "en-US"
       }
     }
   },
