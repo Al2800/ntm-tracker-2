@@ -120,6 +120,7 @@
   };
 
   $: ansiHtml = preview ? renderAnsi(preview.content) : '';
+  $: hasContent = (preview?.content ?? '').trim().length > 0;
 
   const reset = () => {
     preview = null;
@@ -288,9 +289,15 @@
     </div>
 
     <div class="mt-3 max-h-80 overflow-auto rounded-lg border border-slate-800 bg-slate-950/60 p-3">
-      <pre class="whitespace-pre-wrap font-mono text-xs leading-relaxed text-slate-100"
-        >{@html ansiHtml}</pre
-      >
+      {#if !hasContent}
+        <p class="text-sm text-slate-300/80">
+          No output returned. Output capture may be disabled or the pane is empty.
+        </p>
+      {:else}
+        <pre class="whitespace-pre-wrap font-mono text-xs leading-relaxed text-slate-100"
+          >{@html ansiHtml}</pre
+        >
+      {/if}
     </div>
   {/if}
 </div>
