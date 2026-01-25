@@ -177,6 +177,39 @@ Keep the existing dark slate foundation:
 
 ---
 
+---
+
+## Tray Popover Behavior (Implemented)
+
+### Window Configuration (`tauri.conf.json`)
+- **Size**: 380x520 (fixed, non-resizable)
+- **Decorations**: None (no title bar)
+- **Always on top**: Yes
+- **Skip taskbar**: Yes
+- **Shadow**: Enabled
+
+### Behavior (`tray.rs`)
+- **Left-click on tray**: Toggles popover visibility
+- **Double-click on tray**: Opens main dashboard
+- **Close on blur**: Popover hides when it loses focus
+- **Position**: Appears near tray icon click position
+
+### Quick Actions (Frontend)
+- **Open Dashboard**: Hides popover, shows main window
+- **Mute/Unmute**: Toggles notification setting
+- **Settings**: Opens settings page in main window
+
+### Menu Actions (Right-click)
+- **Status**: Shows session count (disabled item)
+- **Sessions submenu**: Lists active sessions (click opens in main)
+- **Search Sessions**: Opens main window with search focused
+- **Open Dashboard**: Shows main window
+- **Snooze Notifications**: Emits snooze event
+- **Settings**: Opens settings
+- **Quit**: Graceful shutdown
+
+---
+
 ## Next Steps
 
 This design note informs:
