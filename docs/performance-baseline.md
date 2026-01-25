@@ -47,3 +47,33 @@ CPU (1Hz polling for 300s):
 - For CPU overhead, 1Hz polling is close to the 0.5% target in this baseline; if WSL measurements are higher, consider:
   - Defaulting to a 2s interval while idle (halves the duty cycle)
   - Using a lighter `FORMAT_STRING` on the hot path and fetching expensive fields less frequently
+
+## Profiling Runbook (Daemon + App)
+
+1. **Poll loop baseline**
+   - `bash benchmarks/tmux_poll.sh`
+2. **Command latency**
+   - `bash benchmarks/command_latency.sh`
+3. **Load test (multi-session)**
+   - `tests/load/scale_test.sh` (see `docs/performance-results.md`)
+4. **CPU flamegraph (daemon)**
+   - `cargo install flamegraph` (once)
+   - `sudo cargo flamegraph --bin ntm-tracker-daemon -- --stdio`
+5. **Memory checks**
+   - Use Task Manager / `Get-Process` on Windows
+   - Record RSS before/after 60 minutes
+
+## Bottlenecks to Watch
+
+- Slow `ntm --robot-markdown` sections (avoid heavy sections with `--md-sections sessions`)
+- Large `robot-tail` payloads (limit `--lines`)
+- SQLite write stalls (check WAL size + busy timeouts)
+- UI render spikes (large session lists without virtualization)
+
+## Results (Fill In)
+
+- Poll loop p95:
+- Command latency p95:
+- Event processing p95:
+- Daemon memory delta (60m):
+- UI render p95:
