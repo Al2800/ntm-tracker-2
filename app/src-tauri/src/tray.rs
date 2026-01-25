@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager, Wry};
+use tauri::{AppHandle, Emitter, Listener, Manager, PhysicalPosition, Wry};
 
 const TRAY_ID: &str = "ntm-tracker-tray";
 const MENU_STATUS: &str = "tray_status";
@@ -217,12 +217,14 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
             TrayIconEvent::Click {
                 button,
                 button_state,
+                position,
                 ..
             } => {
                 if matches!(button, MouseButton::Left)
                     && matches!(button_state, MouseButtonState::Up)
                 {
-                    show_main_window(tray.app_handle());
+                    // Left click toggles the popover window
+                    toggle_popover(tray.app_handle(), Some(position));
                 }
             }
             _ => {}
@@ -237,6 +239,10 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     };
     state.update(TraySummary::default(), Vec::new())?;
     app.manage(state);
+
+    // Set up popover close-on-blur behavior
+    setup_popover_blur(app);
+
     Ok(())
 }
 
@@ -245,6 +251,45 @@ fn show_main_window(app: &AppHandle) {
         let _ = window.show();
         let _ = window.set_focus();
     }
+}
+
+/// Toggle the popover window at the given screen position (near tray icon).
+fn toggle_popover(app: &AppHandle, position: Option<PhysicalPosition<f64>>) {
+    let Some(popover) = app.get_webview_window("popover") else {
+        return;
+    };
+
+    // If visible, hide it
+    if popover.is_visible().unwrap_or(false) {
+        let _ = popover.hide();
+        return;
+    }
+
+    // Position near the tray click location
+    if let Some(pos) = position {
+        // Get popover size to position it so it appears above/left of click
+        let size = popover.outer_size().unwrap_or_default();
+        let x = (pos.x as i32).saturating_sub(size.width as i32);
+        let y = (pos.y as i32).saturating_sub(size.height as i32);
+        let _ = popover.set_position(PhysicalPosition::new(x.max(0), y.max(0)));
+    }
+
+    let _ = popover.show();
+    let _ = popover.set_focus();
+}
+
+/// Set up close-on-blur for the popover window.
+pub fn setup_popover_blur(app: &AppHandle) {
+    let Some(popover) = app.get_webview_window("popover") else {
+        return;
+    };
+
+    let app_clone = app.clone();
+    popover.listen("tauri://blur", move |_| {
+        if let Some(window) = app_clone.get_webview_window("popover") {
+            let _ = window.hide();
+        }
+    });
 }
 
 #[derive(Clone, Debug)]

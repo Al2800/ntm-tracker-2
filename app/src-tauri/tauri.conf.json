@@ -13,9 +13,24 @@
     "windows": [
       {
         "title": "NTM Tracker",
+        "label": "main",
         "width": 1100,
         "height": 720,
         "resizable": true
+      },
+      {
+        "title": "NTM Tracker",
+        "label": "popover",
+        "url": "/?view=compact",
+        "width": 380,
+        "height": 520,
+        "resizable": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": true,
+        "shadow": true
       }
     ],
     "security": {
