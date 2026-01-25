@@ -6,10 +6,7 @@ import { events } from '../stores/events';
 import { settings } from '../stores/settings';
 import { selectSession, sessions } from '../stores/sessions';
 
-const QUIET_START_HOUR = 22;
-const QUIET_END_HOUR = 7;
 const DEDUPE_WINDOW_MS = 5 * 60 * 1000;
-const MAX_PER_HOUR = 10;
 
 let snoozedUntil: number | null = null;
 let lastEventId: number | null = null;
@@ -23,10 +20,12 @@ let unlistenSnooze: UnlistenFn | null = null;
 
 const isQuietHours = (now: Date) => {
   const hour = now.getHours();
-  if (QUIET_START_HOUR < QUIET_END_HOUR) {
-    return hour >= QUIET_START_HOUR && hour < QUIET_END_HOUR;
+  const quietStart = currentSettings.quietHoursStart;
+  const quietEnd = currentSettings.quietHoursEnd;
+  if (quietStart < quietEnd) {
+    return hour >= quietStart && hour < quietEnd;
   }
-  return hour >= QUIET_START_HOUR || hour < QUIET_END_HOUR;
+  return hour >= quietStart || hour < quietEnd;
 };
 
 const isSnoozed = () => snoozedUntil !== null && Date.now() < snoozedUntil;
@@ -44,7 +43,7 @@ export const snoozeUntilTomorrow = () => {
   const now = new Date();
   const target = new Date(now);
   target.setDate(now.getDate() + 1);
-  target.setHours(QUIET_END_HOUR, 0, 0, 0);
+  target.setHours(currentSettings.quietHoursEnd, 0, 0, 0);
   snoozedUntil = target.getTime();
 };
 
@@ -67,7 +66,7 @@ const shouldNotify = (event: TrackerEvent) => {
   if (isSnoozed()) return false;
 
   pruneRecent();
-  if (recentSent.length >= MAX_PER_HOUR) return false;
+  if (recentSent.length >= currentSettings.notificationMaxPerHour) return false;
 
   const key = `${event.type}:${event.sessionUid}`;
   const lastSeen = lastByKey.get(key);

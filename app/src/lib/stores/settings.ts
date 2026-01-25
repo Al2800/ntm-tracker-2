@@ -9,7 +9,12 @@ const defaultSettings: AppSettings = {
   showNotifications: true,
   notifyOnCompact: true,
   notifyOnEscalation: true,
-  theme: 'system'
+  quietHoursStart: 22,
+  quietHoursEnd: 7,
+  notificationMaxPerHour: 10,
+  theme: 'system',
+  debugMode: false,
+  logLevel: 'info'
 };
 
 const settingsStore = writable<AppSettings>(defaultSettings);
@@ -41,7 +46,7 @@ export const initSettings = () => {
     try {
       const remote = await getSettings();
       hydrating = true;
-      settingsStore.set(remote);
+      settingsStore.set({ ...defaultSettings, ...remote });
     } catch {
       // Keep defaults if unavailable.
     } finally {

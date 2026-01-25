@@ -53,5 +53,10 @@ export interface AppSettings {
   showNotifications: boolean;
   notifyOnCompact: boolean;
   notifyOnEscalation: boolean;
+  quietHoursStart: number;
+  quietHoursEnd: number;
+  notificationMaxPerHour: number;
   theme: 'system' | 'light' | 'dark';
+  debugMode: boolean;
+  logLevel: 'trace' | 'debug' | 'info' | 'warn' | 'error';
 }

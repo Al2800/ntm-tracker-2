@@ -22,7 +22,12 @@ pub struct AppSettings {
     pub show_notifications: bool,
     pub notify_on_compact: bool,
     pub notify_on_escalation: bool,
+    pub quiet_hours_start: u8,
+    pub quiet_hours_end: u8,
+    pub notification_max_per_hour: u32,
     pub theme: String,
+    pub debug_mode: bool,
+    pub log_level: String,
 }
 
 impl Default for AppSettings {
@@ -34,7 +39,12 @@ impl Default for AppSettings {
             show_notifications: true,
             notify_on_compact: true,
             notify_on_escalation: true,
+            quiet_hours_start: 22,
+            quiet_hours_end: 7,
+            notification_max_per_hour: 10,
             theme: "system".to_string(),
+            debug_mode: false,
+            log_level: "info".to_string(),
         }
     }
 }

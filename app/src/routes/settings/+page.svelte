@@ -11,6 +11,7 @@
 
   const transportOptions: AppSettings['transport'][] = ['wsl-stdio', 'ws', 'http'];
   const themeOptions: AppSettings['theme'][] = ['system', 'light', 'dark'];
+  const logLevelOptions: AppSettings['logLevel'][] = ['trace', 'debug', 'info', 'warn', 'error'];
 
   const parseBool = (value: unknown) => Boolean(value);
 
@@ -36,6 +37,18 @@
   const onReset = async () => {
     resetSettings();
     await onSave();
+  };
+
+  const onHourField = (field: 'quietHoursStart' | 'quietHoursEnd') => (event: Event) => {
+    const value = Number.parseInt((event.target as HTMLInputElement).value, 10);
+    if (!Number.isFinite(value) || value < 0 || value > 23) return;
+    updateSettings({ [field]: value } as Partial<AppSettings>);
+  };
+
+  const onMaxPerHour = (event: Event) => {
+    const value = Number.parseInt((event.target as HTMLInputElement).value, 10);
+    if (!Number.isFinite(value) || value <= 0) return;
+    updateSettings({ notificationMaxPerHour: value });
   };
 </script>
 
@@ -110,12 +123,20 @@
             />
             Launch on startup
           </label>
+
+          <div class="text-sm text-slate-300/80">
+            <p class="font-semibold text-slate-200">WSL distro</p>
+            <p class="mt-1">
+              Automatic selection uses the default WSL distro. Multi-distro selection
+              is not implemented yet.
+            </p>
+          </div>
         </div>
       </section>
 
       <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
         <h2 class="text-lg font-semibold text-white">Notifications</h2>
-        <div class="mt-4 grid gap-3 text-sm text-slate-200">
+        <div class="mt-4 grid gap-4 text-sm text-slate-200 sm:grid-cols-2">
           <label class="flex items-center gap-3">
             <input
               type="checkbox"
@@ -140,6 +161,44 @@
             />
             Notify on escalations
           </label>
+
+          <label class="grid gap-2">
+            Quiet hours start (0-23)
+            <input
+              class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              type="number"
+              min="0"
+              max="23"
+              step="1"
+              value={$settings.quietHoursStart}
+              on:input={onHourField('quietHoursStart')}
+            />
+          </label>
+
+          <label class="grid gap-2">
+            Quiet hours end (0-23)
+            <input
+              class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              type="number"
+              min="0"
+              max="23"
+              step="1"
+              value={$settings.quietHoursEnd}
+              on:input={onHourField('quietHoursEnd')}
+            />
+          </label>
+
+          <label class="grid gap-2">
+            Max notifications per hour
+            <input
+              class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              type="number"
+              min="1"
+              step="1"
+              value={$settings.notificationMaxPerHour}
+              on:input={onMaxPerHour}
+            />
+          </label>
         </div>
       </section>
 
@@ -163,7 +222,48 @@
           </label>
         </div>
       </section>
+
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+        <h2 class="text-lg font-semibold text-white">Advanced</h2>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+          <label class="flex items-center gap-3 text-sm text-slate-200">
+            <input
+              type="checkbox"
+              checked={$settings.debugMode}
+              on:change={(event) => updateSettings({ debugMode: parseBool((event.target as HTMLInputElement).checked) })}
+            />
+            Debug mode
+          </label>
+
+          <label class="grid gap-2 text-sm text-slate-200">
+            Log level
+            <select
+              class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              value={$settings.logLevel}
+              on:change={(event) =>
+                updateSettings({
+                  logLevel: (event.target as HTMLSelectElement).value as AppSettings['logLevel']
+                })}
+            >
+              {#each logLevelOptions as option}
+                <option value={option}>{option}</option>
+              {/each}
+            </select>
+          </label>
+
+          <div class="text-sm text-slate-300/80 sm:col-span-2">
+            Poll intervals and daemon-side debug flags are not configurable yet.
+          </div>
+        </div>
+      </section>
+
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+        <h2 class="text-lg font-semibold text-white">About</h2>
+        <div class="mt-3 text-sm text-slate-300/80">
+          Settings are stored in the app config directory and applied immediately.
+          Upgrade checks and detailed version reporting will be added next.
+        </div>
+      </section>
     </div>
   </div>
 </main>
-
