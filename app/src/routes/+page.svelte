@@ -100,13 +100,13 @@
             feel right at home in your system tray.
           </p>
         </div>
-        <div class="flex flex-col items-start gap-2 rounded-2xl border border-slate-800/80 bg-slate-900/60 p-4">
-          <span class="text-xs uppercase tracking-[0.2em] text-slate-400">Connection</span>
-          <span class={`rounded-full px-3 py-1 text-xs ${connectionBadge[$connectionState]}`}>
-            {connectionLabel[$connectionState]}
+        <div class="card-compact flex flex-col items-start gap-2">
+          <span class="label">Connection</span>
+          <span class="badge {connectionStatus.badge}">
+            {connectionStatus.label}
           </span>
           {#if $lastConnectionError}
-            <span class="text-xs text-slate-500">{$lastConnectionError}</span>
+            <span class="text-xs text-text-subtle">{$lastConnectionError}</span>
           {/if}
         </div>
       </header>
@@ -167,26 +167,26 @@
       <section class="mt-3 space-y-3">
         <!-- Compact overview stats -->
         <div class="grid grid-cols-3 gap-2 text-center">
-          <div class="rounded-lg border border-slate-800/80 bg-slate-900/60 px-2 py-2">
-            <p class="text-lg font-bold text-white">{$sessions.length}</p>
-            <p class="text-[10px] uppercase tracking-wider text-slate-400">Sessions</p>
+          <div class="card-compact px-2 py-2">
+            <p class="text-lg font-bold text-text-primary">{$sessions.length}</p>
+            <p class="label-sm">Sessions</p>
           </div>
-          <div class="rounded-lg border border-slate-800/80 bg-slate-900/60 px-2 py-2">
-            <p class="text-lg font-bold text-emerald-400">{sortedSessions.filter(s => s.status === 'active').length}</p>
-            <p class="text-[10px] uppercase tracking-wider text-slate-400">Active</p>
+          <div class="card-compact px-2 py-2">
+            <p class="text-lg font-bold text-status-success">{sortedSessions.filter(s => s.status === 'active').length}</p>
+            <p class="label-sm">Active</p>
           </div>
-          <div class="rounded-lg border border-slate-800/80 bg-slate-900/60 px-2 py-2">
-            <p class="text-lg font-bold text-amber-400">{pendingEscalations.length}</p>
-            <p class="text-[10px] uppercase tracking-wider text-slate-400">Alerts</p>
+          <div class="card-compact px-2 py-2">
+            <p class="text-lg font-bold text-status-warning">{pendingEscalations.length}</p>
+            <p class="label-sm">Alerts</p>
           </div>
         </div>
 
         <!-- Session list (compact) -->
-        <div class="rounded-lg border border-slate-800/80 bg-slate-900/60 p-3">
+        <div class="card-compact p-3">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Sessions</span>
+            <span class="label-sm">Sessions</span>
             <button
-              class="text-[10px] text-sky-400 hover:text-sky-300"
+              class="text-[10px] text-accent hover:text-accent-hover transition"
               type="button"
               on:click={async () => {
                 try {
@@ -207,42 +207,38 @@
           </div>
           <div class="space-y-1.5 max-h-[280px] overflow-y-auto">
             {#each sortedSessions.slice(0, 8) as session (session.sessionUid)}
-              <div class="flex items-center justify-between rounded border border-slate-800/60 bg-slate-950/60 px-2 py-1.5">
+              {@const sessionStatus = getSessionStatus(session.status)}
+              <div class="tray-item-compact">
                 <div class="min-w-0 flex-1">
-                  <p class="text-sm font-medium text-slate-100 truncate">{session.name}</p>
+                  <p class="text-sm font-medium text-text-primary truncate">{session.name}</p>
                 </div>
-                <span class={`ml-2 shrink-0 rounded-full px-1.5 py-0.5 text-[10px] ${
-                  session.status === 'active'
-                    ? 'bg-emerald-500/15 text-emerald-300'
-                    : session.status === 'idle'
-                      ? 'bg-amber-500/15 text-amber-300'
-                      : 'bg-slate-500/15 text-slate-400'
-                }`}>
-                  {session.status}
+                <span class="ml-2 shrink-0 flex items-center gap-1">
+                  <span class="status-dot {sessionStatus.dot}"></span>
+                  <span class="text-[10px] text-text-muted">{sessionStatus.label}</span>
                 </span>
               </div>
             {/each}
             {#if sortedSessions.length === 0}
-              <p class="text-xs text-slate-500 text-center py-4">No sessions yet</p>
+              <p class="text-xs text-text-subtle text-center py-4">No sessions yet</p>
             {/if}
             {#if sortedSessions.length > 8}
-              <p class="text-[10px] text-slate-500 text-center pt-1">+{sortedSessions.length - 8} more</p>
+              <p class="text-[10px] text-text-subtle text-center pt-1">+{sortedSessions.length - 8} more</p>
             {/if}
           </div>
         </div>
 
         <!-- Pending alerts (compact) -->
         {#if pendingEscalations.length > 0}
-          <div class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-            <span class="text-[10px] font-semibold uppercase tracking-wider text-amber-400">Pending Alerts</span>
+          <div class="card-compact card-critical p-3">
+            <span class="label-sm text-status-warning-text">Pending Alerts</span>
             <div class="mt-2 space-y-1">
               {#each pendingEscalations.slice(0, 3) as escalation (escalation.id)}
-                <div class="rounded border border-amber-500/20 bg-slate-950/60 px-2 py-1.5 text-xs text-amber-200">
+                <div class="tray-item-compact bg-surface-base text-status-warning-text">
                   {escalation.message || 'Attention required'}
                 </div>
               {/each}
               {#if pendingEscalations.length > 3}
-                <p class="text-[10px] text-amber-400/70 text-center">+{pendingEscalations.length - 3} more</p>
+                <p class="text-[10px] text-status-warning-text/70 text-center">+{pendingEscalations.length - 3} more</p>
               {/if}
             </div>
           </div>
@@ -251,14 +247,14 @@
         <!-- Quick actions -->
         <div class="flex gap-2">
           <button
-            class="flex-1 rounded-lg border border-slate-700/80 bg-slate-900/60 px-3 py-2 text-xs text-slate-300 hover:border-slate-500 hover:text-white transition"
+            class="btn btn-sm btn-secondary flex-1"
             type="button"
             on:click={toggleNotifications}
           >
             {$settings.showNotifications ? '🔔 Mute' : '🔕 Unmute'}
           </button>
           <button
-            class="flex-1 rounded-lg border border-slate-700/80 bg-slate-900/60 px-3 py-2 text-xs text-slate-300 hover:border-slate-500 hover:text-white transition"
+            class="btn btn-sm btn-secondary flex-1"
             type="button"
             on:click={() => goto('/settings')}
           >
