@@ -28,6 +28,8 @@ Use this guide to diagnose connection issues, missing data, or instability.
   ```
 - **VPN / firewall interference**: Temporarily disable VPN or firewall to test TCP connectivity.
 - **Port conflicts**: Ensure `127.0.0.1:3847` is free if using WS/HTTP.
+- **Unauthorized errors**: If `security.admin-token-path` is set, send
+  `Authorization: Bearer <token>` (or `?auth=<token>` for WebSocket handshakes).
 
 ## No Sessions Showing
 

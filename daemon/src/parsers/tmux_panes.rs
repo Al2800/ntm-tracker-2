@@ -93,8 +93,8 @@ mod tests {
         assert_eq!(meta.pane_index, 0);
         assert_eq!(meta.pane_pid, 111);
         assert_eq!(meta.pane_current_command, "fish");
-        assert_eq!(meta.pane_dead, false);
-        assert_eq!(meta.pane_in_mode, true);
+        assert!(!meta.pane_dead);
+        assert!(meta.pane_in_mode);
     }
 
     #[test]
@@ -163,8 +163,8 @@ mod tests {
     fn handles_dead_pane() {
         let line = "$1:@2:%3:0:111:fish:1700000000:1:0";
         let meta = parse_tmux_panes(line).expect("parse").remove(0);
-        assert_eq!(meta.pane_dead, true);
-        assert_eq!(meta.pane_in_mode, false);
+        assert!(meta.pane_dead);
+        assert!(!meta.pane_in_mode);
     }
 
     #[test]

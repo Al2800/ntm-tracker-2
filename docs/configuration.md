@@ -59,6 +59,8 @@ format = "text"
 - `admin-token-path` (string, optional)
   - Path to admin token file.
   - On Unix, file permissions must be **0600**.
+  - For WS/HTTP transports, provide the token via `Authorization: Bearer <token>`.
+    WebSocket clients may also pass `?auth=<token>` during the handshake.
 
 ### `privacy`
 - `redaction-patterns` (string array, default `[]`)

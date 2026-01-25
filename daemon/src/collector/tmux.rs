@@ -233,7 +233,7 @@ mod tests {
             pane_in_mode: false,
         };
 
-        let (changed, removed) = collector.diff_state(&[meta.clone()]);
+        let (changed, removed) = collector.diff_state(std::slice::from_ref(&meta));
         assert_eq!(changed, 1);
         assert_eq!(removed, 0);
 

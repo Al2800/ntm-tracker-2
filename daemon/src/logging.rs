@@ -298,10 +298,12 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("create temp log dir");
         let path = dir.join("daemon.log");
 
-        let mut config = LoggingConfig::default();
-        config.file = Some(path.clone());
-        config.max_file_mb = 1; // not used in test logic
-        config.max_files = 3;
+        let config = LoggingConfig {
+            file: Some(path.clone()),
+            max_file_mb: 1, // not used in test logic
+            max_files: 3,
+            ..Default::default()
+        };
 
         let mut writer = RotatingFileWriter::new(path.clone(), &config).expect("writer");
         writer.max_bytes = 32; // force rotation quickly

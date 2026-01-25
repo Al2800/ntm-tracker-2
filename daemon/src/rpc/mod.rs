@@ -221,10 +221,7 @@ mod tests {
     #[test]
     fn capabilities_probe_runs_without_panic() {
         // Just verify probing doesn't crash
-        let caps = Capabilities::probe();
-        // tmux is usually available on dev machines
-        // ntm availability varies
-        assert!(caps.tmux || !caps.tmux); // trivially true, just tests probe runs
+        let _ = Capabilities::probe();
     }
 
     #[test]
@@ -297,9 +294,7 @@ mod tests {
     #[test]
     fn systemd_probe_checks_path() {
         // Just verify it runs
-        let has_systemd = probe_systemd_available();
-        // Result depends on system
-        assert!(has_systemd || !has_systemd);
+        let _ = probe_systemd_available();
     }
 
     #[test]

@@ -242,7 +242,7 @@ fn main() {
         estimator.add_bytes(4000);
 
         let estimate = estimator.estimate();
-        // 8000 bytes / ~3.75 chars per token = ~2133 tokens, rounded.
+        // Heuristic should land in the low thousands for this input size.
         assert!(estimate.tokens >= 2000);
         assert!(estimate.tokens <= 3000);
     }
@@ -368,7 +368,7 @@ fn main() {
     fn detect_code_handles_multibyte_utf8() {
         // Create input with emoji at position 1000 to test UTF-8 boundary handling
         let mut input = "fn main() { let x = 42; } ".repeat(40); // ~1000 chars of code
-        input.push_str("🎉"); // Multi-byte character at the boundary
+        input.push('🎉'); // Multi-byte character at the boundary
         input.push_str("more code fn test() {}");
 
         // Should not panic when truncating at byte 1000
