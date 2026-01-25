@@ -69,34 +69,60 @@ impl MaintenanceRunner {
     pub async fn run_loop(self, mut shutdown: broadcast::Receiver<()>) {
         let interval_ms = self.config.rollup_interval_ms.max(60_000);
         let mut ticker = tokio::time::interval(Duration::from_millis(interval_ms));
+        let mut in_flight: Option<tokio::task::JoinHandle<rusqlite::Result<MaintenanceSummary>>> =
+            None;
 
         loop {
             tokio::select! {
                 _ = ticker.tick() => {
+                    if let Some(handle) = in_flight.take() {
+                        if handle.is_finished() {
+                            match handle.await {
+                                Ok(Ok(_summary)) => {}
+                                Ok(Err(err)) => {
+                                    warn!(error = %err, "maintenance cycle failed");
+                                }
+                                Err(err) => {
+                                    warn!(error = %err, "maintenance task panicked");
+                                }
+                            }
+                        } else {
+                            in_flight = Some(handle);
+                            warn!("maintenance cycle still running; skipping tick");
+                            continue;
+                        }
+                    }
+
                     let db_path = self.db_path.clone();
                     let config = self.config.clone();
                     let tz_offset_min = self.tz_offset_min;
 
-                    let result = tokio::task::spawn_blocking(move || {
+                    in_flight = Some(tokio::task::spawn_blocking(move || {
                         let runner = MaintenanceRunner {
                             db_path,
                             config,
                             tz_offset_min,
                         };
                         runner.run_once()
-                    }).await;
-
-                    match result {
-                        Ok(Ok(_summary)) => {}
-                        Ok(Err(err)) => {
-                            warn!(error = %err, "maintenance cycle failed");
-                        }
-                        Err(err) => {
-                            warn!(error = %err, "maintenance task panicked");
-                        }
-                    }
+                    }));
                 }
                 _ = shutdown.recv() => {
+                    if let Some(handle) = in_flight.take() {
+                        if handle.is_finished() {
+                            match handle.await {
+                                Ok(Ok(_summary)) => {}
+                                Ok(Err(err)) => {
+                                    warn!(error = %err, "maintenance cycle failed");
+                                }
+                                Err(err) => {
+                                    warn!(error = %err, "maintenance task panicked");
+                                }
+                            }
+                        } else {
+                            warn!("maintenance cycle still running; aborting on shutdown");
+                            handle.abort();
+                        }
+                    }
                     info!("maintenance shutdown received");
                     break;
                 }
