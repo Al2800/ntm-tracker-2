@@ -17,8 +17,8 @@ use tracing::{debug, error, info, trace, warn};
 pub struct HttpConfig {
     /// Port to listen on.
     pub port: u16,
-    /// Admin token for privileged operations.
-    pub admin_token: Option<String>,
+    /// Admin credential for privileged operations.
+    pub admin_credential: Option<String>,
     /// Regular tokens for non-admin access.
     pub tokens: Vec<String>,
 }
@@ -26,8 +26,8 @@ pub struct HttpConfig {
 impl Default for HttpConfig {
     fn default() -> Self {
         Self {
-            port: 3848,
-            admin_token: None,
+            port: 3847,
+            admin_credential: None,
             tokens: Vec::new(),
         }
     }
@@ -185,26 +185,26 @@ impl HttpServer {
             if line.to_lowercase().starts_with("authorization:") {
                 let value = line.split_once(':')?.1.trim();
                 if value.to_lowercase().starts_with("bearer ") {
-                    let token = value[7..].trim();
-                    return self.authenticate(token);
+                    let credential = value[7..].trim();
+                    return self.authenticate(credential);
                 }
             }
         }
         // No auth header - allow unauthenticated access if no tokens configured
-        if self.config.admin_token.is_none() && self.config.tokens.is_empty() {
+        if self.config.admin_credential.is_none() && self.config.tokens.is_empty() {
             Some(false)
         } else {
             None
         }
     }
 
-    fn authenticate(&self, token: &str) -> Option<bool> {
-        if let Some(admin_token) = &self.config.admin_token {
-            if token == admin_token {
+    fn authenticate(&self, credential: &str) -> Option<bool> {
+        if let Some(admin_credential) = &self.config.admin_credential {
+            if credential == admin_credential {
                 return Some(true);
             }
         }
-        if self.config.tokens.contains(&token.to_string()) {
+        if self.config.tokens.contains(&credential.to_string()) {
             return Some(false);
         }
         None
@@ -250,15 +250,15 @@ mod tests {
     #[test]
     fn default_config() {
         let config = HttpConfig::default();
-        assert_eq!(config.port, 3848);
-        assert!(config.admin_token.is_none());
+        assert_eq!(config.port, 3847);
+        assert!(config.admin_credential.is_none());
         assert!(config.tokens.is_empty());
     }
 
     #[test]
     fn parse_valid_request() {
         let request = "POST /rpc HTTP/1.1\r\nHost: localhost\r\n\r\n{\"jsonrpc\":\"2.0\"}";
-        let (headers, body) = parse_http_request(request).unwrap();
+        let (headers, body) = parse_http_request(request).unwrap_or(("", ""));
         assert!(headers.contains("POST /rpc"));
         assert!(body.contains("jsonrpc"));
     }
@@ -266,7 +266,7 @@ mod tests {
     #[test]
     fn parse_request_with_lf_only() {
         let request = "POST /rpc HTTP/1.1\nHost: localhost\n\n{\"jsonrpc\":\"2.0\"}";
-        let (headers, body) = parse_http_request(request).unwrap();
+        let (headers, body) = parse_http_request(request).unwrap_or(("", ""));
         assert!(headers.contains("POST /rpc"));
         assert!(body.contains("jsonrpc"));
     }
@@ -274,8 +274,8 @@ mod tests {
     #[test]
     fn authenticate_tokens() {
         let config = HttpConfig {
-            port: 3848,
-            admin_token: Some("admin123".to_string()),
+            port: 3847,
+            admin_credential: Some("admin123".to_string()),
             tokens: vec!["user456".to_string()],
         };
         let server = HttpServer::new(config);
@@ -288,8 +288,8 @@ mod tests {
     #[test]
     fn extract_auth_requires_token_when_configured() {
         let config = HttpConfig {
-            port: 3848,
-            admin_token: Some("admin123".to_string()),
+            port: 3847,
+            admin_credential: Some("admin123".to_string()),
             tokens: vec!["user456".to_string()],
         };
         let server = HttpServer::new(config);

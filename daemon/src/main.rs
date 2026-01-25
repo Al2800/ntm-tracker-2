@@ -206,6 +206,14 @@ async fn run_daemon(
     // Initialize structured logging (keep guard alive for duration of program)
     let _log_guard = logging::init(&log_config);
 
+    let admin_credential = match load_admin_credential(&config) {
+        Ok(credential) => credential,
+        Err(err) => {
+            tracing::error!(error = %err, "Failed to load admin token");
+            std::process::exit(2);
+        }
+    };
+
     tracing::info!(
         daemon = ntm_tracker_daemon::APP_NAME,
         version = ntm_tracker_daemon::version(),
@@ -238,7 +246,7 @@ async fn run_daemon(
     if let Some(port) = ws_port {
         let ws_config = transport::ws::WsConfig {
             port,
-            admin_token: None, // TODO: get from config
+            admin_credential: admin_credential.clone(),
             tokens: Vec::new(),
         };
         let ws_server = transport::ws::WsServer::new(ws_config);
@@ -252,7 +260,7 @@ async fn run_daemon(
     if let Some(port) = http_port {
         let http_config = transport::http::HttpConfig {
             port,
-            admin_token: None, // TODO: get from config
+            admin_credential: admin_credential.clone(),
             tokens: Vec::new(),
         };
         let http_server = transport::http::HttpServer::new(http_config);
@@ -291,4 +299,22 @@ fn config_path_str(config: &ConfigManager) -> String {
         .config_path()
         .map(|path| path.display().to_string())
         .unwrap_or_else(|| "<defaults>".to_string())
+}
+
+fn load_admin_credential(config: &ConfigManager) -> Result<Option<String>, String> {
+    let credential_path = config.current().security.admin_token_path;
+    let Some(path) = credential_path else {
+        return Ok(None);
+    };
+
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|err| format!("Unable to read admin token file '{}': {err}", path.display()))?;
+    let credential = raw.trim().to_string();
+    if credential.is_empty() {
+        return Err(format!(
+            "Admin token file '{}' is empty",
+            path.display()
+        ));
+    }
+    Ok(Some(credential))
 }

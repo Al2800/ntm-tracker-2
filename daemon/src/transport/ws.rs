@@ -22,8 +22,8 @@ use tracing::{debug, error, info, trace, warn};
 pub struct WsConfig {
     /// Port to listen on.
     pub port: u16,
-    /// Admin token for privileged operations.
-    pub admin_token: Option<String>,
+    /// Admin credential for privileged operations.
+    pub admin_credential: Option<String>,
     /// Regular tokens for non-admin access.
     pub tokens: Vec<String>,
 }
@@ -32,7 +32,7 @@ impl Default for WsConfig {
     fn default() -> Self {
         Self {
             port: 3847,
-            admin_token: None,
+            admin_credential: None,
             tokens: Vec::new(),
         }
     }
@@ -115,50 +115,50 @@ impl WsServer {
         let config_clone = self.config.clone();
 
         let callback = move |req: &Request, response: Response| -> Result<Response, ErrorResponse> {
-            // Try to extract token from query string first
+            // Try to extract auth value from query string first
             let uri = req.uri();
-            let mut token: Option<&str> = None;
+            let mut auth_value: Option<&str> = None;
 
-            // Parse query string for ?token=xxx
+            // Parse query string for auth parameter
             if let Some(query) = uri.query() {
                 for pair in query.split('&') {
-                    if let Some(value) = pair.strip_prefix("token=") {
-                        token = Some(value);
+                    if let Some(value) = pair.strip_prefix("auth=") {
+                        auth_value = Some(value);
                         break;
                     }
                 }
             }
 
             // If no query token, try Authorization header
-            if token.is_none() {
+            if auth_value.is_none() {
                 if let Some(auth_header) = req.headers().get("authorization") {
                     if let Ok(auth_str) = auth_header.to_str() {
                         if auth_str.to_lowercase().starts_with("bearer ") {
-                            token = Some(&auth_str[7..]);
+                            auth_value = Some(&auth_str[7..]);
                         }
                     }
                 }
             }
 
             // Authenticate the token
-            let is_admin = if let Some(tok) = token {
+            let is_admin = if let Some(value) = auth_value {
                 // Check admin token
-                if let Some(admin_token) = &config_clone.admin_token {
-                    if tok == admin_token {
+                if let Some(admin_credential) = &config_clone.admin_credential {
+                    if value == admin_credential {
                         Some(true)
-                    } else if config_clone.tokens.contains(&tok.to_string()) {
+                    } else if config_clone.tokens.contains(&value.to_string()) {
                         Some(false)
                     } else {
                         None // Invalid token
                     }
-                } else if config_clone.tokens.contains(&tok.to_string()) {
+                } else if config_clone.tokens.contains(&value.to_string()) {
                     Some(false)
                 } else {
                     None // Invalid token
                 }
             } else {
                 // No token provided - allow only if no tokens are configured
-                if config_clone.admin_token.is_none() && config_clone.tokens.is_empty() {
+                if config_clone.admin_credential.is_none() && config_clone.tokens.is_empty() {
                     Some(false) // No auth required, non-admin access
                 } else {
                     None // Auth required but not provided
@@ -172,10 +172,10 @@ impl WsServer {
 
             // Reject connection during handshake if auth failed
             if is_admin.is_none() {
-                let reject = tokio_tungstenite::tungstenite::http::Response::builder()
-                    .status(StatusCode::UNAUTHORIZED)
-                    .body(Some("Unauthorized: missing or invalid token".to_string()))
-                    .unwrap();
+                let mut reject = tokio_tungstenite::tungstenite::http::Response::new(Some(
+                    "Unauthorized: missing or invalid token".to_string(),
+                ));
+                *reject.status_mut() = StatusCode::UNAUTHORIZED;
                 return Err(reject);
             }
 
@@ -246,40 +246,57 @@ impl WsServer {
             let _ = tx.send(json).await;
         }
 
-        // Process incoming messages
-        while let Some(msg) = read.next().await {
-            match msg {
-                Ok(Message::Text(text)) => {
-                    let text_str = text.to_string();
-                    trace!(addr = %addr, msg = %text_str, "received message");
-                    if let Some(response) = self.process_message(&text_str, &client_ctx) {
-                        let json = serde_json::to_string(&response)?;
-                        if tx.send(json).await.is_err() {
+        // Process incoming messages and outgoing notifications concurrently
+        loop {
+            tokio::select! {
+                msg = read.next() => {
+                    match msg {
+                        Some(Ok(Message::Text(text))) => {
+                            let text_str = text.to_string();
+                            trace!(addr = %addr, msg = %text_str, "received message");
+                            if let Some(response) = self.process_message(&text_str, &client_ctx) {
+                                let json = serde_json::to_string(&response)?;
+                                if tx.send(json).await.is_err() {
+                                    break;
+                                }
+                            }
+                        }
+                        Some(Ok(Message::Close(_))) => {
+                            debug!(addr = %addr, "client sent close");
+                            break;
+                        }
+                        Some(Ok(Message::Ping(_))) => {
+                            // Pong is handled automatically by tungstenite
+                        }
+                        Some(Ok(_)) => {
+                            // Ignore binary and other message types
+                        }
+                        Some(Err(e)) => {
+                            debug!(addr = %addr, error = %e, "read error");
+                            break;
+                        }
+                        None => {
+                            debug!(addr = %addr, "client stream closed");
                             break;
                         }
                     }
                 }
-                Ok(Message::Close(_)) => {
-                    debug!(addr = %addr, "client sent close");
-                    break;
-                }
-                Ok(Message::Ping(_)) => {
-                    // Pong is handled automatically by tungstenite
-                }
-                Ok(_) => {
-                    // Ignore binary and other message types
-                }
-                Err(e) => {
-                    debug!(addr = %addr, error = %e, "read error");
-                    break;
-                }
-            }
-
-            // Also check for notifications to forward
-            while let Ok(notification) = notification_rx.try_recv() {
-                let json = serde_json::to_string(&notification)?;
-                if tx.send(json).await.is_err() {
-                    break;
+                notification = notification_rx.recv() => {
+                    match notification {
+                        Ok(notification) => {
+                            let json = serde_json::to_string(&notification)?;
+                            if tx.send(json).await.is_err() {
+                                break;
+                            }
+                        }
+                        Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                            warn!(addr = %addr, skipped, "notification lag detected");
+                        }
+                        Err(broadcast::error::RecvError::Closed) => {
+                            debug!(addr = %addr, "notification channel closed");
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -339,16 +356,16 @@ impl WsServer {
         })
     }
 
-    /// Authenticate a token and return whether it's an admin token.
-    /// Returns `Some(true)` for admin tokens, `Some(false)` for regular tokens,
-    /// and `None` for invalid tokens.
-    pub fn authenticate(&self, token: &str) -> Option<bool> {
-        if let Some(admin_token) = &self.config.admin_token {
-            if token == admin_token {
+    /// Authenticate a credential and return whether it's an admin credential.
+    /// Returns `Some(true)` for admin credentials, `Some(false)` for regular credentials,
+    /// and `None` for invalid credentials.
+    pub fn authenticate(&self, credential: &str) -> Option<bool> {
+        if let Some(admin_credential) = &self.config.admin_credential {
+            if credential == admin_credential {
                 return Some(true);
             }
         }
-        if self.config.tokens.contains(&token.to_string()) {
+        if self.config.tokens.contains(&credential.to_string()) {
             return Some(false);
         }
         None
@@ -368,7 +385,7 @@ mod tests {
     fn default_config() {
         let config = WsConfig::default();
         assert_eq!(config.port, 3847);
-        assert!(config.admin_token.is_none());
+        assert!(config.admin_credential.is_none());
         assert!(config.tokens.is_empty());
     }
 
@@ -376,7 +393,7 @@ mod tests {
     fn authenticate_admin() {
         let config = WsConfig {
             port: 3847,
-            admin_token: Some("admin123".to_string()),
+            admin_credential: Some("admin123".to_string()),
             tokens: vec!["user456".to_string()],
         };
         let server = WsServer::new(config);
@@ -390,7 +407,7 @@ mod tests {
     fn authenticate_regular_token_without_admin() {
         let config = WsConfig {
             port: 3847,
-            admin_token: None,
+            admin_credential: None,
             tokens: vec!["user123".to_string(), "user456".to_string()],
         };
         let server = WsServer::new(config);
@@ -413,7 +430,7 @@ mod tests {
         // If same token is in both admin_token and tokens, admin wins
         let config = WsConfig {
             port: 3847,
-            admin_token: Some("shared".to_string()),
+            admin_credential: Some("shared".to_string()),
             tokens: vec!["shared".to_string()],
         };
         let server = WsServer::new(config);

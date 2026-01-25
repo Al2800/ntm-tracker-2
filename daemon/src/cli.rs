@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 /// Default HTTP port for client connections.
-pub const DEFAULT_PORT: u16 = 9847;
+pub const DEFAULT_PORT: u16 = 3847;
 
 /// HTTP client for daemon RPC calls.
 pub struct DaemonClient {
@@ -434,8 +434,8 @@ mod tests {
 
     #[test]
     fn daemon_client_creation() {
-        let client = DaemonClient::new(9847);
-        assert_eq!(client.port, 9847);
+        let client = DaemonClient::new(3847);
+        assert_eq!(client.port, 3847);
         assert!(client.admin_auth_header.is_none());
 
         let client = client.with_admin_token("secret".to_string());
