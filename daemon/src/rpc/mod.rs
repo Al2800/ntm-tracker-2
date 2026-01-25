@@ -1,4 +1,5 @@
 use crate::cache::Cache;
+use crate::config::ConfigManager;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -28,6 +29,7 @@ pub struct Capabilities {
 #[derive(Clone)]
 pub struct RpcContext {
     pub cache: Arc<Cache>,
+    pub config: ConfigManager,
     pub instance_id: String,
     pub run_id: String,
     pub started_at: Instant,
@@ -38,9 +40,10 @@ pub struct RpcContext {
 }
 
 impl RpcContext {
-    pub fn new(cache: Arc<Cache>) -> Self {
+    pub fn new(cache: Arc<Cache>, config: ConfigManager) -> Self {
         Self {
             cache,
+            config,
             instance_id: Uuid::now_v7().to_string(),
             run_id: Uuid::now_v7().to_string(),
             started_at: Instant::now(),
