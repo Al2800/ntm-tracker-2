@@ -334,7 +334,8 @@ pub async fn list_wsl_distros(_app: AppHandle) -> Result<Vec<String>, String> {
                 String::from_utf8_lossy(&output.stderr)
             ));
         }
-        let raw = String::from_utf8_lossy(&output.stdout);
+        // wsl.exe outputs UTF-16LE on Windows; decode it properly
+        let raw = decode_wsl_output(&output.stdout);
         let distros = raw
             .lines()
             .map(|line| line.trim())
@@ -348,6 +349,25 @@ pub async fn list_wsl_distros(_app: AppHandle) -> Result<Vec<String>, String> {
     {
         Err("WSL distro listing is only available on Windows".to_string())
     }
+}
+
+/// Decode output from wsl.exe which uses UTF-16LE encoding on Windows.
+#[cfg(target_os = "windows")]
+fn decode_wsl_output(bytes: &[u8]) -> String {
+    // Try UTF-16LE first (wsl.exe default on Windows)
+    if bytes.len() >= 2 && bytes.len() % 2 == 0 {
+        let u16_iter = bytes
+            .chunks_exact(2)
+            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]));
+        // Skip BOM if present (0xFEFF)
+        let u16_vec: Vec<u16> = u16_iter.collect();
+        let start = if u16_vec.first() == Some(&0xFEFF) { 1 } else { 0 };
+        if let Ok(decoded) = String::from_utf16(&u16_vec[start..]) {
+            return decoded;
+        }
+    }
+    // Fall back to UTF-8 lossy if UTF-16LE decode fails
+    String::from_utf8_lossy(bytes).into_owned()
 }
 
 #[tauri::command]

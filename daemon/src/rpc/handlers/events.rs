@@ -1,5 +1,5 @@
 use crate::cache::{Cache, EventRecord};
-use crate::rpc::{parse_params, RpcContext, RpcResult};
+use crate::rpc::{parse_params, RpcContext, RpcError, RpcResult, CODE_UNSUPPORTED};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -132,8 +132,11 @@ pub fn escalations_list(ctx: &RpcContext) -> RpcResult<Value> {
 
 pub fn escalations_dismiss(_ctx: &RpcContext, params: Value) -> RpcResult<Value> {
     let params: EscalationDismissParams = parse_params(params)?;
-    Ok(json!({
-        "dismissed": true,
-        "escalationId": params.escalation_id
-    }))
+    Err(RpcError::new(
+        CODE_UNSUPPORTED,
+        format!(
+            "escalations.dismiss not implemented for escalation {}",
+            params.escalation_id
+        ),
+    ))
 }
