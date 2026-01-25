@@ -130,6 +130,30 @@ pub async fn daemon_stop(_app: AppHandle, state: State<'_, AppState>) -> Result<
 }
 
 #[tauri::command]
+pub async fn daemon_restart(_app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let mut guard = state
+        .0
+        .lock()
+        .map_err(|_| "App state lock poisoned".to_string())?;
+    if let Some(manager) = guard.manager.as_ref() {
+        let _ = manager.stop();
+    }
+    guard.manager = None;
+
+    match DaemonManager::start(&guard.settings.transport) {
+        Ok(manager) => {
+            guard.manager = Some(manager);
+            guard.last_error = None;
+            Ok(())
+        }
+        Err(err) => {
+            guard.last_error = Some(err.clone());
+            Err(err)
+        }
+    }
+}
+
+#[tauri::command]
 pub async fn daemon_health(
     _app: AppHandle,
     state: State<'_, AppState>,

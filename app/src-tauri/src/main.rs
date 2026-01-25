@@ -8,8 +8,8 @@ mod transport;
 mod tray;
 
 use commands::{
-    daemon_health, daemon_start, daemon_stop, export_diagnostics, get_attach_command, get_settings,
-    load_settings, rpc_call, set_settings, AppState,
+    daemon_health, daemon_restart, daemon_start, daemon_stop, export_diagnostics, get_attach_command,
+    get_settings, load_settings, rpc_call, set_settings, AppState,
 };
 use tauri::Manager;
 
@@ -34,6 +34,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             daemon_start,
             daemon_stop,
+            daemon_restart,
             daemon_health,
             rpc_call,
             get_settings,
