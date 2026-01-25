@@ -4,6 +4,7 @@ mod bootstrap;
 mod autostart;
 mod commands;
 mod daemon;
+mod upgrade;
 mod transport;
 mod tray;
 
@@ -28,7 +29,7 @@ fn main() {
             }
             tray::init(app.handle())?;
             tray::spawn_updater(app.handle().clone());
-            bootstrap::start(app.handle().clone());
+            upgrade::start(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
