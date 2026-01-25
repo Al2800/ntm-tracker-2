@@ -17,7 +17,7 @@
 
   // Pending escalations count for header
   $: pendingCount = $events.filter(
-    (e) => e.type === 'escalation' && (e.status ?? 'pending') === 'pending'
+    (e) => e.eventType === 'escalation' && (e.status ?? 'pending') === 'pending'
   ).length;
 </script>
 

@@ -10,7 +10,7 @@
 
   let listContainer: HTMLElement;
 
-  const dispatch = createEventDispatcher<{ select: { paneUid: string } }>();
+  const dispatch = createEventDispatcher<{ select: { paneId: string } }>();
 
   const formatAge = (timestamp?: number) => {
     if (!timestamp) return null;
@@ -60,32 +60,32 @@
   role={selectable ? 'listbox' : 'list'}
   aria-label="Pane list"
 >
-  {#each panes as pane, index (pane.paneUid)}
+  {#each panes as pane, index (pane.paneId)}
     {@const paneStatus = getPaneStatus(pane.status)}
     <button
       data-pane-button
       type="button"
       role={selectable ? 'option' : undefined}
-      aria-selected={selectable ? selectedPaneId === pane.paneUid : undefined}
-      aria-label="Pane {pane.index}, {paneStatus.label}{pane.agentType ? `, ${pane.agentType}` : ''}"
+      aria-selected={selectable ? selectedPaneId === pane.paneId : undefined}
+      aria-label="Pane {pane.paneIndex}, {paneStatus.label}{pane.agentType ? `, ${pane.agentType}` : ''}"
       class={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-border-focus focus-visible:ring-offset-1 focus-visible:ring-offset-surface-base ${
-        selectedPaneId === pane.paneUid
+        selectedPaneId === pane.paneId
           ? 'card-selected'
           : 'border-border bg-surface-base hover:border-border-strong'
       } ${selectable ? 'card-interactive' : 'cursor-default'}`}
-      on:click={() => selectable && dispatch('select', { paneUid: pane.paneUid })}
+      on:click={() => selectable && dispatch('select', { paneId: pane.paneId })}
       on:keydown={(e) => handleKeydown(e, index)}
     >
       <div class="flex items-center gap-3">
         <span class="status-dot {paneStatus.dot}"></span>
         <div>
-          <p class="text-sm font-semibold text-text-primary">Pane {pane.index}</p>
+          <p class="text-sm font-semibold text-text-primary">Pane {pane.paneIndex}</p>
           <div class="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-label-tight text-text-subtle">
             {#if pane.agentType}
               <span>{pane.agentType}</span>
               <span class="text-text-subtle/50">•</span>
             {/if}
-            <span class="font-mono normal-case text-text-muted">{pane.paneUid.slice(0, 8)}</span>
+            <span class="font-mono normal-case text-text-muted">{pane.paneId.slice(0, 8)}</span>
           </div>
         </div>
       </div>

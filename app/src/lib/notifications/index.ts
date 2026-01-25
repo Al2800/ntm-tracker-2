@@ -90,8 +90,8 @@ const ensurePermission = async () => {
 
 const shouldNotify = (event: TrackerEvent) => {
   if (!currentSettings.showNotifications) return false;
-  if (event.type === 'compact' && !currentSettings.notifyOnCompact) return false;
-  if (event.type === 'escalation' && !currentSettings.notifyOnEscalation) return false;
+  if (event.eventType === 'compact' && !currentSettings.notifyOnCompact) return false;
+  if (event.eventType === 'escalation' && !currentSettings.notifyOnEscalation) return false;
   if (isQuietHours(new Date())) return false;
   if (isSnoozed()) return false;
 
@@ -99,7 +99,7 @@ const shouldNotify = (event: TrackerEvent) => {
   pruneLastByKey();
   if (recentSent.length >= currentSettings.notificationMaxPerHour) return false;
 
-  const key = `${event.type}:${event.sessionUid}`;
+  const key = `${event.eventType}:${event.sessionId}`;
   const lastSeen = lastByKey.get(key);
   if (lastSeen && Date.now() - lastSeen < DEDUPE_WINDOW_MS) {
     return false;
@@ -111,14 +111,14 @@ const shouldNotify = (event: TrackerEvent) => {
 
 const sessionLabel = (event: TrackerEvent) => {
   const sessionList = get(sessions);
-  const session = sessionList.find((item) => item.sessionUid === event.sessionUid);
-  return session?.name ?? event.sessionUid;
+  const session = sessionList.find((item) => item.sessionId === event.sessionId);
+  return session?.name ?? event.sessionId;
 };
 
 const notificationBody = (event: TrackerEvent) => {
   const sessionName = sessionLabel(event);
-  const paneLabel = event.paneUid;
-  if (event.type === 'compact') {
+  const paneLabel = event.paneId;
+  if (event.eventType === 'compact') {
     const tokenMatch = event.message?.match(/\d+/)?.[0];
     const tokenInfo = tokenMatch ? ` (was ~${tokenMatch} tokens)` : '';
     return `${sessionName}:${paneLabel} auto-compacted${tokenInfo}`;
@@ -128,7 +128,7 @@ const notificationBody = (event: TrackerEvent) => {
 };
 
 const focusEvent = (event: TrackerEvent) => {
-  selectSession(event.sessionUid);
+  selectSession(event.sessionId);
   window.focus();
 };
 
@@ -137,7 +137,7 @@ const notifyEvent = async (event: TrackerEvent) => {
   const granted = await ensurePermission();
   if (!granted) return;
 
-  const title = event.type === 'compact' ? 'Context Compacted' : 'Escalation';
+  const title = event.eventType === 'compact' ? 'Context Compacted' : 'Escalation';
   const body = notificationBody(event);
 
   // Use Tauri's notification plugin for proper native notifications
@@ -162,7 +162,7 @@ const handleEventsUpdate = (current: TrackerEvent[]) => {
   const newEvents = current.filter((event) => event.id > lastEventId).sort((a, b) => a.id - b.id);
   lastEventId = maxId;
   newEvents.forEach((event) => {
-    if (event.type === 'compact' || event.type === 'escalation') {
+    if (event.eventType === 'compact' || event.eventType === 'escalation') {
       void notifyEvent(event);
     }
   });

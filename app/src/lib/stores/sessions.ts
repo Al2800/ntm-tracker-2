@@ -39,14 +39,14 @@ export const pinnedSessionIds = {
 
 export const selectedSession = derived(
   [sessionsStore, selectedSessionIdStore],
-  ([$sessions, $selectedId]) => $sessions.find((session) => session.sessionUid === $selectedId) ?? null
+  ([$sessions, $selectedId]) => $sessions.find((session) => session.sessionId === $selectedId) ?? null
 );
 
 export const setSessions = (next: Session[]) => sessionsStore.set(next);
 
 export const upsertSession = (session: Session) =>
   sessionsStore.update((current) => {
-    const index = current.findIndex((item) => item.sessionUid === session.sessionUid);
+    const index = current.findIndex((item) => item.sessionId === session.sessionId);
     if (index === -1) {
       return [...current, session];
     }
@@ -55,15 +55,15 @@ export const upsertSession = (session: Session) =>
     return updated;
   });
 
-export const selectSession = (sessionUid: string | null) => selectedSessionIdStore.set(sessionUid);
+export const selectSession = (sessionId: string | null) => selectedSessionIdStore.set(sessionId);
 
-export const togglePinSession = (sessionUid: string) => {
+export const togglePinSession = (sessionId: string) => {
   pinnedSessionIdsStore.update((current) => {
     const next = new Set(current);
-    if (next.has(sessionUid)) {
-      next.delete(sessionUid);
+    if (next.has(sessionId)) {
+      next.delete(sessionId);
     } else {
-      next.add(sessionUid);
+      next.add(sessionId);
     }
     // Persist to localStorage
     if (typeof window !== 'undefined') {

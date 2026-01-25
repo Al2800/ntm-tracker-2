@@ -38,7 +38,7 @@
   $: sessionCount = $sessions.length;
   $: paneCount = $sessions.reduce((sum, session) => sum + (session.paneCount ?? 0), 0);
   $: compactsToday = $events.filter(
-    (event) => event.type === 'compact' && normalizeTimestamp(event.detectedAt) >= todayStartMs
+    (event) => event.eventType === 'compact' && normalizeTimestamp(event.detectedAt) >= todayStartMs
   ).length;
   $: activeMinutes = $dailyStats
     .filter((stat) => normalizeTimestamp(stat.dayStart) >= todayStartMs)
@@ -47,7 +47,7 @@
   $: activeSessions = $sessions.filter((session) => session.status === 'active').length;
   $: escalations = $events.filter(
     (event) =>
-      event.type === 'escalation' && normalizeTimestamp(event.detectedAt) >= todayStartMs
+      event.eventType === 'escalation' && normalizeTimestamp(event.detectedAt) >= todayStartMs
   ).length;
 
   // Use centralized status system

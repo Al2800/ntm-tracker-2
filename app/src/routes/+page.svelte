@@ -40,8 +40,8 @@
     void tick().then(() => searchInput?.focus());
   }
 
-  $: if (($selectedSession?.sessionUid ?? null) !== lastSelectedSessionId) {
-    lastSelectedSessionId = $selectedSession?.sessionUid ?? null;
+  $: if (($selectedSession?.sessionId ?? null) !== lastSelectedSessionId) {
+    lastSelectedSessionId = $selectedSession?.sessionId ?? null;
     selectedPaneId = null;
   }
 
@@ -55,7 +55,7 @@
 
   $: traySessions = sortedSessions.slice(0, 4);
   $: pendingEscalations = $events.filter(
-    (event) => event.type === 'escalation' && (event.status ?? 'pending') === 'pending'
+    (event) => event.eventType === 'escalation' && (event.status ?? 'pending') === 'pending'
   );
 
   const toggleNotifications = () => {
@@ -65,8 +65,8 @@
   /**
    * Navigate from tray popover to main dashboard with a specific session selected.
    */
-  const openDashboardWithSession = async (sessionUid: string) => {
-    selectSession(sessionUid);
+  const openDashboardWithSession = async (sessionId: string) => {
+    selectSession(sessionId);
     try {
       const { getCurrentWindow, Window } = await import('@tauri-apps/api/window');
       await getCurrentWindow().hide();
@@ -76,7 +76,7 @@
         await main.setFocus();
       }
     } catch {
-      goto('/?focusSession=' + sessionUid);
+      goto('/?focusSession=' + sessionId);
     }
   };
 
@@ -265,13 +265,13 @@
             </button>
           </div>
           <ul class="space-y-1.5 max-h-[280px] overflow-y-auto" aria-labelledby="sessions-heading" role="list">
-            {#each sortedSessions.slice(0, 8) as session (session.sessionUid)}
+            {#each sortedSessions.slice(0, 8) as session (session.sessionId)}
               {@const sessionStatus = getSessionStatus(session.status)}
               <li role="listitem">
                 <button
                   type="button"
                   class="tray-item-compact w-full cursor-pointer hover:border-border-strong focus-ring"
-                  on:click={() => openDashboardWithSession(session.sessionUid)}
+                  on:click={() => openDashboardWithSession(session.sessionId)}
                   aria-label="Open {session.name} in dashboard"
                 >
                   <div class="min-w-0 flex-1 text-left">
@@ -381,11 +381,11 @@
               </span>
             </div>
             <ul class="mt-4 space-y-2" role="list" aria-label="Session preview">
-              {#each traySessions as session (session.sessionUid)}
+              {#each traySessions as session (session.sessionId)}
                 <li class="tray-item" role="listitem">
                   <div>
                     <p class="font-semibold text-text-primary">{session.name}</p>
-                    <p class="text-xs text-text-muted font-mono">{session.sessionUid.slice(0, 8)}</p>
+                    <p class="text-xs text-text-muted font-mono">{session.sessionId.slice(0, 8)}</p>
                   </div>
                   <span class="text-xs text-text-secondary">{session.status}</span>
                 </li>
@@ -419,7 +419,7 @@
                       <span class="status-dot {sessionStatus.dot}" aria-hidden="true"></span>
                       {sessionStatus.label}
                     </span>
-                    <span class="text-xs text-text-subtle font-mono" aria-label="Session ID">{$selectedSession.sessionUid.slice(0, 12)}</span>
+                    <span class="text-xs text-text-subtle font-mono" aria-label="Session ID">{$selectedSession.sessionId.slice(0, 12)}</span>
                   </div>
                 </div>
                 <button
@@ -455,7 +455,7 @@
                   panes={$selectedSession.panes ?? []}
                   selectable
                   selectedPaneId={selectedPaneId}
-                  on:select={(event) => (selectedPaneId = event.detail.paneUid)}
+                  on:select={(event) => (selectedPaneId = event.detail.paneId)}
                 />
               </div>
 

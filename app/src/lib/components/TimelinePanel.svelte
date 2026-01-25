@@ -24,8 +24,8 @@
     return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
-  $: sessionUid = $selectedSession?.sessionUid;
-  $: filtered = $events.filter((event) => (sessionUid ? event.sessionUid === sessionUid : true));
+  $: sessionId = $selectedSession?.sessionId;
+  $: filtered = $events.filter((event) => (sessionId ? event.sessionId === sessionId : true));
   $: sorted = [...filtered]
     .sort((a, b) => order === 'desc' ? b.detectedAt - a.detectedAt : a.detectedAt - b.detectedAt)
     .slice(0, limit);
@@ -33,8 +33,8 @@
 
   const labelFor = (event: TrackerEvent) => {
     const parts = [];
-    if (event.sessionUid) parts.push(event.sessionUid.slice(0, 6));
-    if (event.paneUid) parts.push(event.paneUid.slice(0, 4));
+    if (event.sessionId) parts.push(event.sessionId.slice(0, 6));
+    if (event.paneId) parts.push(event.paneId.slice(0, 4));
     return parts.join(':') || '';
   };
 </script>
@@ -44,7 +44,7 @@
     <div>
       <h3 class="label">Timeline</h3>
       <p class="mt-1 text-xs text-text-subtle">
-        {#if sessionUid}
+        {#if sessionId}
           Events for selected session
         {:else}
           Recent session, pane, and escalation events
@@ -73,7 +73,7 @@
   {:else}
     <div class="mt-4 space-y-1.5 max-h-[320px] overflow-y-auto" role="list" aria-label="Timeline events">
       {#each sorted as event (event.id)}
-        {@const eventType = getEventType(event.type)}
+        {@const eventType = getEventType(event.eventType)}
         <div class="tray-item group" role="listitem">
           <div class="flex items-center gap-3 min-w-0">
             <span class="text-base" title={eventType.description}>{eventType.icon}</span>

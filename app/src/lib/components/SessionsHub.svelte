@@ -56,7 +56,7 @@
   // Search matching
   const matchesSearch = (session: Session, query: string) => {
     if (!query) return true;
-    const haystack = `${session.name} ${session.sessionUid}`.toLowerCase();
+    const haystack = `${session.name} ${session.sessionId}`.toLowerCase();
     return haystack.includes(query.toLowerCase());
   };
 
@@ -97,7 +97,7 @@
   }
 
   function handleSelect(session: Session) {
-    selectSession(session.sessionUid);
+    selectSession(session.sessionId);
     dispatch('focus', { session });
   }
 
@@ -162,10 +162,10 @@
         compact
       />
     {:else}
-      {#each visibleSessions as session (session.sessionUid)}
+      {#each visibleSessions as session (session.sessionId)}
         <SessionItem
           {session}
-          selected={session.sessionUid === $selectedSessionId}
+          selected={session.sessionId === $selectedSessionId}
           on:select={() => handleSelect(session)}
           on:action={(e) => handleAction(session, e.detail)}
         />

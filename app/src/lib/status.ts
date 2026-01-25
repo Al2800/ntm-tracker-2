@@ -210,7 +210,7 @@ export const ESCALATION_SEVERITY: Record<EscalationSeverity, {
 
 // =============================================================================
 // EVENT TYPE
-// Matches TrackerEvent.type from types.ts
+// Matches TrackerEvent.eventType from types.ts
 // =============================================================================
 
 export type EventType = 'compact' | 'escalation' | 'pane.status' | 'session.status';

@@ -24,7 +24,7 @@
 
   // Pending escalations count for notification badge
   $: pendingCount = $events.filter(
-    (e) => e.type === 'escalation' && (e.status ?? 'pending') === 'pending'
+    (e) => e.eventType === 'escalation' && (e.status ?? 'pending') === 'pending'
   ).length;
 
   // Handle Ctrl+K to focus search

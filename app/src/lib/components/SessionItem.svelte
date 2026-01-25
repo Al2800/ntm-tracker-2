@@ -94,7 +94,7 @@
         {/if}
       </div>
       <div class="mt-0.5 flex items-center gap-2 text-2xs text-text-muted">
-        <span class="font-mono">{session.sessionUid.slice(0, 8)}</span>
+        <span class="font-mono">{session.sessionId.slice(0, 8)}</span>
         <span class="text-text-subtle">·</span>
         <span>
           {#if activeCount > 0}

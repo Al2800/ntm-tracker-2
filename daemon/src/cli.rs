@@ -6,7 +6,7 @@
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{Shutdown, TcpStream};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -89,6 +89,7 @@ impl DaemonClient {
         stream
             .read_to_end(&mut response)
             .map_err(|e| CliError::Connection(e.to_string()))?;
+        let _ = stream.shutdown(Shutdown::Both);
 
         let response_str = String::from_utf8_lossy(&response);
 
@@ -250,7 +251,12 @@ pub fn cmd_status(port: u16, format: OutputFormat, admin_token: Option<String>) 
 
     if format == OutputFormat::Text {
         // Pretty print session summary
-        if let Some(sessions) = result.as_array() {
+        let sessions = result
+            .get("sessions")
+            .and_then(|value| value.as_array())
+            .or_else(|| result.as_array());
+
+        if let Some(sessions) = sessions {
             if sessions.is_empty() {
                 println!("No active sessions");
             } else {
@@ -289,14 +295,27 @@ pub fn cmd_events(
     let result = client.call("events.list", params)?;
 
     if format == OutputFormat::Text {
-        if let Some(events) = result.as_array() {
+        let events = result
+            .get("events")
+            .and_then(|value| value.as_array())
+            .or_else(|| result.as_array());
+
+        if let Some(events) = events {
             if events.is_empty() {
                 println!("No recent events");
             } else {
                 println!("Recent events ({}):", events.len());
                 for event in events {
-                    let event_type = event.get("eventType").and_then(|v| v.as_str()).unwrap_or("?");
-                    let session = event.get("sessionUid").and_then(|v| v.as_str()).unwrap_or("?");
+                    let event_type = event
+                        .get("eventType")
+                        .or_else(|| event.get("type"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("?");
+                    let session = event
+                        .get("sessionId")
+                        .or_else(|| event.get("sessionUid"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("?");
                     let detected_at = event.get("detectedAt").and_then(|v| v.as_i64()).unwrap_or(0);
                     let severity = event.get("severity").and_then(|v| v.as_str());
 

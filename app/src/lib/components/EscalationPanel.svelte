@@ -29,7 +29,7 @@
   };
 
   $: pending = $events.filter(
-    (event) => event.type === 'escalation' && (event.status ?? 'pending') === 'pending'
+    (event) => event.eventType === 'escalation' && (event.status ?? 'pending') === 'pending'
   );
   $: sorted = [...pending].sort((a, b) => {
     const rankA = ESCALATION_SEVERITY[mapSeverity(a.severity)]?.rank ?? 4;
@@ -39,8 +39,8 @@
 
   const labelFor = (event: TrackerEvent) => {
     const parts = [];
-    if (event.sessionUid) parts.push(event.sessionUid.slice(0, 8));
-    if (event.paneUid) parts.push(event.paneUid.slice(0, 6));
+    if (event.sessionId) parts.push(event.sessionId.slice(0, 8));
+    if (event.paneId) parts.push(event.paneId.slice(0, 6));
     return parts.join(':') || 'Unknown';
   };
 </script>

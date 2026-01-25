@@ -20,8 +20,8 @@
   let sortBy: SortOption = 'status';
   let showPinnedOnly = false;
 
-  const handleToggle = (sessionUid: string) => {
-    selectSession($selectedSessionId === sessionUid ? null : sessionUid);
+  const handleToggle = (sessionId: string) => {
+    selectSession($selectedSessionId === sessionId ? null : sessionId);
   };
 
   const isSubsequence = (needle: string, haystack: string) => {
@@ -38,7 +38,7 @@
   };
 
   const matchesToken = (session: Session, token: string) => {
-    const haystack = `${session.name} ${session.sessionUid}`.toLowerCase();
+    const haystack = `${session.name} ${session.sessionId}`.toLowerCase();
     return haystack.includes(token) || isSubsequence(token, haystack);
   };
 
@@ -57,8 +57,8 @@
   const sortSessions = (list: Session[], sortOption: SortOption): Session[] => {
     return [...list].sort((a, b) => {
       // Pinned sessions always come first
-      const aPinned = $pinnedSessionIds.has(a.sessionUid);
-      const bPinned = $pinnedSessionIds.has(b.sessionUid);
+      const aPinned = $pinnedSessionIds.has(a.sessionId);
+      const bPinned = $pinnedSessionIds.has(b.sessionId);
       if (aPinned !== bPinned) return aPinned ? -1 : 1;
 
       switch (sortOption) {
@@ -96,7 +96,7 @@
 
   // Filter by pinned
   $: pinnedFiltered = showPinnedOnly
-    ? statusFiltered.filter((s) => $pinnedSessionIds.has(s.sessionUid))
+    ? statusFiltered.filter((s) => $pinnedSessionIds.has(s.sessionId))
     : statusFiltered;
 
   // Apply sorting
@@ -145,7 +145,7 @@
       case ' ':
         event.preventDefault();
         if (focusedIndex >= 0 && focusedIndex < filteredSessions.length) {
-          handleToggle(filteredSessions[focusedIndex].sessionUid);
+          handleToggle(filteredSessions[focusedIndex].sessionId);
         }
         break;
       case 'Escape':
@@ -189,7 +189,7 @@
   role="listbox"
   tabindex="0"
   aria-label="Session list"
-  aria-activedescendant={focusedIndex >= 0 ? `session-${filteredSessions[focusedIndex]?.sessionUid}` : undefined}
+  aria-activedescendant={focusedIndex >= 0 ? `session-${filteredSessions[focusedIndex]?.sessionId}` : undefined}
   on:keydown={handleKeydown}
 >
   <!-- Filter & Sort Controls -->
@@ -265,14 +265,14 @@
       compact={dense}
     />
   {:else}
-    {#each filteredSessions as session (session.sessionUid)}
+    {#each filteredSessions as session (session.sessionId)}
       <SessionCard
         {session}
-        expanded={session.sessionUid === $selectedSessionId}
+        expanded={session.sessionId === $selectedSessionId}
         dense={dense}
-        pinned={$pinnedSessionIds.has(session.sessionUid)}
-        on:toggle={(event) => handleToggle(event.detail.sessionUid)}
-        on:pin={(event) => togglePinSession(event.detail.sessionUid)}
+        pinned={$pinnedSessionIds.has(session.sessionId)}
+        on:toggle={(event) => handleToggle(event.detail.sessionId)}
+        on:pin={(event) => togglePinSession(event.detail.sessionId)}
       >
         <PaneList panes={session.panes ?? []} dense={dense} />
       </SessionCard>

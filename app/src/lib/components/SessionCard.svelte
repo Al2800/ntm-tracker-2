@@ -9,13 +9,13 @@
   export let pinned = false;
 
   const dispatch = createEventDispatcher<{
-    toggle: { sessionUid: string };
-    pin: { sessionUid: string };
+    toggle: { sessionId: string };
+    pin: { sessionId: string };
   }>();
 
   const handlePin = (e: Event) => {
     e.stopPropagation();
-    dispatch('pin', { sessionUid: session.sessionUid });
+    dispatch('pin', { sessionId: session.sessionId });
   };
 
   // Use centralized status system
@@ -41,7 +41,7 @@
 
 <div
   data-session-card
-  id="session-{session.sessionUid}"
+  id="session-{session.sessionId}"
   tabindex="0"
   role="option"
   aria-selected={expanded}
@@ -52,7 +52,7 @@
   on:keydown={(e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      dispatch('toggle', { sessionUid: session.sessionUid });
+      dispatch('toggle', { sessionId: session.sessionId });
     }
   }}
 >
@@ -63,7 +63,7 @@
     <button
       type="button"
       class="flex flex-1 items-center gap-3 text-left"
-      on:click={() => dispatch('toggle', { sessionUid: session.sessionUid })}
+      on:click={() => dispatch('toggle', { sessionId: session.sessionId })}
     >
       <div
         class={`flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-surface-base ${
@@ -77,7 +77,7 @@
           {session.name}
         </p>
         <p class="text-[11px] uppercase tracking-[0.25em] text-text-muted">
-          Session · {session.sessionUid.slice(0, 8)}
+          Session · {session.sessionId.slice(0, 8)}
         </p>
       </div>
     </button>
@@ -105,7 +105,7 @@
       <button
         type="button"
         class="text-lg text-text-subtle hover:text-text-secondary p-1"
-        on:click={() => dispatch('toggle', { sessionUid: session.sessionUid })}
+        on:click={() => dispatch('toggle', { sessionId: session.sessionId })}
       >
         {expanded ? '▾' : '▸'}
       </button>

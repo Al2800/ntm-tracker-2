@@ -1,9 +1,9 @@
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'degraded';
 
 export interface Pane {
-  paneUid: string;
-  sessionUid: string;
-  index: number;
+  paneId: string;
+  sessionId: string;
+  paneIndex: number;
   status: 'active' | 'idle' | 'waiting' | 'ended' | 'unknown';
   agentType?: string;
   lastActivityAt?: number;
@@ -11,7 +11,7 @@ export interface Pane {
 }
 
 export interface Session {
-  sessionUid: string;
+  sessionId: string;
   name: string;
   status: 'active' | 'idle' | 'ended' | 'unknown';
   paneCount: number;
@@ -21,9 +21,9 @@ export interface Session {
 
 export interface TrackerEvent {
   id: number;
-  sessionUid: string;
-  paneUid: string;
-  type: 'compact' | 'escalation' | 'pane.status' | 'session.status';
+  sessionId: string;
+  paneId: string;
+  eventType: 'compact' | 'escalation' | 'pane.status' | 'session.status';
   detectedAt: number;
   severity?: 'info' | 'warn' | 'error';
   message?: string;
@@ -32,7 +32,7 @@ export interface TrackerEvent {
 
 export interface HourlyStats {
   hourStart: number;
-  sessionUid: string;
+  sessionId: string;
   totalCompacts: number;
   activeMinutes: number;
   estimatedTokens: number;
@@ -40,7 +40,7 @@ export interface HourlyStats {
 
 export interface DailyStats {
   dayStart: number;
-  sessionUid: string;
+  sessionId: string;
   totalCompacts: number;
   activeMinutes: number;
   estimatedTokens: number;
