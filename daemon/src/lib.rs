@@ -2,18 +2,23 @@ pub const APP_NAME: &str = "ntm-tracker-daemon";
 
 pub mod bus;
 pub mod cache;
+pub mod cli;
 pub mod collector;
 pub mod command;
 pub mod config;
 pub mod db;
 pub mod detector;
+pub mod logging;
+pub mod metrics;
 pub mod models;
 pub mod ntm;
 pub mod parsers;
 pub mod reconcile;
 pub mod redaction;
 pub mod rpc;
+pub mod service;
 pub mod state;
+pub mod token_estimator;
 pub mod transport;
 
 pub fn version() -> &'static str {
