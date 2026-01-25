@@ -76,6 +76,25 @@ Then reproduce the issue and attach the log file to your report.
 - Validate regexes in `privacy.redaction-patterns`.
 - If `security.admin-token-path` is set on Unix, ensure permissions are `0600`.
 
+## Daemon Upgrade Rollback
+
+If a daemon upgrade fails a health check, the app restores the previous binary
+automatically.
+
+### Manual rollback (WSL)
+
+If you need to restore manually, run:
+
+```powershell
+wsl.exe -- sh -lc "mv ~/.local/bin/ntm-tracker-daemon.backup ~/.local/bin/ntm-tracker-daemon"
+```
+
+You can verify the restored version with:
+
+```powershell
+wsl.exe -- ntm-tracker-daemon --version
+```
+
 ## WSL Networking Notes (WS/HTTP)
 
 WSL localhost forwarding can be unreliable on some machines. If you must use WS/HTTP:
