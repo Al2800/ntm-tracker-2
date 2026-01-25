@@ -1,13 +1,14 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NtmSession {
     pub name: String,
     pub status: Option<String>,
     pub metadata: HashMap<String, String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NtmPane {
     pub session: String,
     pub pane: String,
@@ -16,7 +17,7 @@ pub struct NtmPane {
     pub metadata: HashMap<String, String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NtmMarkdown {
     pub sessions: Vec<NtmSession>,
     pub panes: Vec<NtmPane>,

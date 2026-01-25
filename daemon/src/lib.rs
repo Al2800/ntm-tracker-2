@@ -1,19 +1,20 @@
 pub const APP_NAME: &str = "ntm-tracker-daemon";
 
-pub mod cache;
 pub mod bus;
-pub mod config;
+pub mod cache;
 pub mod collector;
 pub mod command;
+pub mod config;
 pub mod db;
 pub mod detector;
+pub mod models;
 pub mod ntm;
 pub mod parsers;
-pub mod models;
-pub mod rpc;
-pub mod redaction;
-pub mod state;
 pub mod reconcile;
+pub mod redaction;
+pub mod rpc;
+pub mod state;
+pub mod transport;
 
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")

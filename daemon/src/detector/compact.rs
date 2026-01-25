@@ -164,7 +164,7 @@ fn hard_match_reason(input: &str) -> Option<String> {
         }
     }
 
-    if lowered.contains("compacting") {
+    if lowered.contains("compacting") && !lowered.contains("approaching") && !lowered.contains("soon") {
         return Some("compacting".to_string());
     }
 
