@@ -301,9 +301,22 @@ fn redact_line(line: &str) -> String {
 fn redact_after_key(line: &str, key: &str) -> Option<String> {
     let lower = line.to_lowercase();
     let start = lower.find(key)?;
-    let tail = &line[start + key.len()..];
+
+    // Safety: to_lowercase() can change byte lengths for some Unicode characters.
+    // Validate that offsets are valid character boundaries before slicing.
+    let key_end = start + key.len();
+    if !line.is_char_boundary(start) || !line.is_char_boundary(key_end) {
+        return None;
+    }
+
+    let tail = &line[key_end..];
     let delimiter_offset = tail.find(|ch| ch == '=' || ch == ':')?;
-    let split = start + key.len() + delimiter_offset + 1;
+    let split = key_end + delimiter_offset + 1;
+
+    if !line.is_char_boundary(split) {
+        return None;
+    }
+
     Some(format!("{} [REDACTED]", line[..split].trim_end()))
 }
 

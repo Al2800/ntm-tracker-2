@@ -43,7 +43,12 @@ impl Redactor {
 
     pub fn redact(&self, input: &str) -> String {
         let truncated = if input.len() > self.max_scan_bytes {
-            &input[..self.max_scan_bytes]
+            // Find a valid UTF-8 boundary to avoid panicking on multi-byte characters
+            let mut end = self.max_scan_bytes;
+            while end > 0 && !input.is_char_boundary(end) {
+                end -= 1;
+            }
+            &input[..end]
         } else {
             input
         };
@@ -102,4 +107,64 @@ pub fn build_redactor_with_custom_patterns(
         replacement: replacement.unwrap_or_else(|| "[REDACTED]".to_string()),
         max_scan_bytes: max_scan_bytes.unwrap_or(32 * 1024),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redact_handles_multibyte_utf8_at_boundary() {
+        // Create a redactor with a max_scan_bytes that would fall in the middle
+        // of a multi-byte UTF-8 character
+        let config = RedactionConfig {
+            patterns: vec![],
+            replacement: "[REDACTED]".to_string(),
+            max_scan_bytes: 5, // Will fall in middle of emoji if not handled
+        };
+        let redactor = Redactor::from_config(config).unwrap();
+
+        // "Hello🎉" - emoji is 4 bytes, so bytes are: H(1) e(2) l(3) l(4) o(5) 🎉(6-9)
+        // If max_scan_bytes=5, we want "Hello" not a panic
+        let input = "Hello🎉World";
+        let result = redactor.redact(input);
+        assert_eq!(result, "Hello");
+
+        // Test with emoji at the start
+        let input2 = "🎉Hello";
+        let config2 = RedactionConfig {
+            patterns: vec![],
+            replacement: "[REDACTED]".to_string(),
+            max_scan_bytes: 2, // Falls in middle of emoji
+        };
+        let redactor2 = Redactor::from_config(config2).unwrap();
+        // Should not panic, and should return empty or the valid prefix
+        let result2 = redactor2.redact(input2);
+        assert!(result2.is_empty() || result2.chars().all(|c| c.len_utf8() <= 2));
+    }
+
+    #[test]
+    fn redact_basic_patterns() {
+        let redactor = Redactor::default();
+
+        // AWS key pattern
+        let input = "key=AKIAIOSFODNN7EXAMPLE";
+        let result = redactor.redact(input);
+        assert!(result.contains("[REDACTED]"));
+        assert!(!result.contains("AKIAIOSFODNN7EXAMPLE"));
+
+        // Bearer token
+        let input2 = "Authorization: Bearer abc123.xyz789";
+        let result2 = redactor.redact(input2);
+        assert!(result2.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn redact_password_pattern() {
+        let redactor = Redactor::default();
+        let input = "password=secret123";
+        let result = redactor.redact(input);
+        assert!(result.contains("[REDACTED]"));
+        assert!(!result.contains("secret123"));
+    }
 }

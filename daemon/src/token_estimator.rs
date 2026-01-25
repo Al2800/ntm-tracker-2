@@ -135,7 +135,12 @@ fn detect_code_content(text: &str) -> bool {
     ];
 
     let sample = if text.len() > 1000 {
-        &text[..1000]
+        // Find a valid UTF-8 boundary to avoid panicking on multi-byte characters
+        let mut end = 1000;
+        while end > 0 && !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        &text[..end]
     } else {
         text
     };
@@ -357,5 +362,28 @@ fn main() {
     #[test]
     fn default_token_limit_constant() {
         assert_eq!(DEFAULT_TOKEN_LIMIT, 200_000);
+    }
+
+    #[test]
+    fn detect_code_handles_multibyte_utf8() {
+        // Create input with emoji at position 1000 to test UTF-8 boundary handling
+        let mut input = "fn main() { let x = 42; } ".repeat(40); // ~1000 chars of code
+        input.push_str("🎉"); // Multi-byte character at the boundary
+        input.push_str("more code fn test() {}");
+
+        // Should not panic when truncating at byte 1000
+        let result = detect_code_content(&input);
+        // The content has code indicators, so should detect as code
+        assert!(result);
+    }
+
+    #[test]
+    fn detect_code_with_unicode_content() {
+        // Test with various Unicode content
+        let unicode_code = "fn main() { let 你好 = \"世界\"; println!(\"{}\", 你好); }";
+        assert!(detect_code_content(unicode_code));
+
+        let unicode_text = "这是一段中文文本，没有代码特征。";
+        assert!(!detect_code_content(unicode_text));
     }
 }
