@@ -48,6 +48,7 @@ export interface DailyStats {
 
 export interface AppSettings {
   transport: 'wsl-stdio' | 'ws' | 'http';
+  wslDistro: string | null;
   reconnectIntervalMs: number;
   autostartEnabled: boolean;
   showNotifications: boolean;
@@ -59,4 +60,5 @@ export interface AppSettings {
   theme: 'system' | 'light' | 'dark';
   debugMode: boolean;
   logLevel: 'trace' | 'debug' | 'info' | 'warn' | 'error';
+  firstRunComplete: boolean;
 }

@@ -11,9 +11,11 @@ pub enum DaemonManager {
 }
 
 impl DaemonManager {
-    pub fn start(settings_transport: &str) -> Result<Self, String> {
+    pub fn start(settings_transport: &str, wsl_distro: Option<&str>) -> Result<Self, String> {
         match settings_transport {
-            "wsl-stdio" => Ok(Self::Stdio(StdioTransport::spawn(wsl_stdio_command())?)),
+            "wsl-stdio" => Ok(Self::Stdio(StdioTransport::spawn(wsl_stdio_command(
+                wsl_distro,
+            ))?)),
             "ws" => Ok(Self::Ws(WsTransport::new("ws://127.0.0.1:3847")?)),
             "http" => Err("HTTP transport not implemented yet".to_string()),
             other => Err(format!("Unsupported transport '{other}'")),
@@ -43,15 +45,19 @@ impl DaemonManager {
 }
 
 #[cfg(target_os = "windows")]
-fn wsl_stdio_command() -> Command {
+fn wsl_stdio_command(wsl_distro: Option<&str>) -> Command {
     let mut cmd = Command::new("wsl.exe");
-    // TODO: make distro + daemon path configurable via settings.
+    if let Some(distro) = wsl_distro {
+        if !distro.trim().is_empty() {
+            cmd.args(["-d", distro]);
+        }
+    }
     cmd.arg("--").arg("ntm-tracker-daemon").arg("--stdio");
     cmd
 }
 
 #[cfg(not(target_os = "windows"))]
-fn wsl_stdio_command() -> Command {
+fn wsl_stdio_command(_wsl_distro: Option<&str>) -> Command {
     let mut cmd = Command::new("sh");
     cmd.arg("-lc")
         .arg("echo 'wsl-stdio transport is only supported on Windows'; sleep 3600");

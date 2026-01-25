@@ -21,6 +21,8 @@ export const daemonStop = () => invoke<void>('daemon_stop');
 export const daemonRestart = () => invoke<void>('daemon_restart');
 export const daemonHealth = () => invoke<HealthResponse>('daemon_health');
 
+export const listWslDistros = () => invoke<string[]>('list_wsl_distros');
+
 export const rpcCall = <T = unknown>(method: string, params: unknown = {}) =>
   invoke<T>('rpc_call', { method, params });
 

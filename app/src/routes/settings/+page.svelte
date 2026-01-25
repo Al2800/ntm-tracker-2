@@ -3,6 +3,7 @@
 </svelte:head>
 
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { settings, resetSettings, saveSettingsNow, updateSettings } from '$lib/stores/settings';
   import type { AppSettings } from '$lib/types';
 
@@ -49,6 +50,12 @@
     const value = Number.parseInt((event.target as HTMLInputElement).value, 10);
     if (!Number.isFinite(value) || value <= 0) return;
     updateSettings({ notificationMaxPerHour: value });
+  };
+
+  const runWizard = async () => {
+    updateSettings({ firstRunComplete: false });
+    await saveSettingsNow();
+    await goto('/wizard');
   };
 </script>
 
@@ -124,13 +131,31 @@
             Launch on startup
           </label>
 
-          <div class="text-sm text-slate-300/80">
-            <p class="font-semibold text-slate-200">WSL distro</p>
-            <p class="mt-1">
-              Automatic selection uses the default WSL distro. Multi-distro selection
-              is not implemented yet.
-            </p>
-          </div>
+          <label class="grid gap-2 text-sm text-slate-200">
+            WSL distro (optional)
+            <input
+              class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              placeholder="default"
+              value={$settings.wslDistro ?? ''}
+              on:input={(event) => {
+                const value = (event.target as HTMLInputElement).value.trim();
+                updateSettings({ wslDistro: value.length === 0 ? null : value });
+              }}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+        <h2 class="text-lg font-semibold text-white">Onboarding</h2>
+        <div class="mt-3 flex flex-wrap items-center justify-between gap-4 text-sm text-slate-300/80">
+          <p>Re-run the first-run wizard to verify WSL + notifications.</p>
+          <button
+            class="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm hover:bg-slate-800"
+            on:click={runWizard}
+          >
+            Run wizard
+          </button>
         </div>
       </section>
 

@@ -17,6 +17,8 @@ use tauri::{AppHandle, Manager, State};
 #[serde(rename_all = "camelCase", default)]
 pub struct AppSettings {
     pub transport: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wsl_distro: Option<String>,
     pub reconnect_interval_ms: u64,
     pub autostart_enabled: bool,
     pub show_notifications: bool,
@@ -28,12 +30,14 @@ pub struct AppSettings {
     pub theme: String,
     pub debug_mode: bool,
     pub log_level: String,
+    pub first_run_complete: bool,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             transport: "wsl-stdio".to_string(),
+            wsl_distro: None,
             reconnect_interval_ms: 5000,
             autostart_enabled: true,
             show_notifications: true,
@@ -45,6 +49,7 @@ impl Default for AppSettings {
             theme: "system".to_string(),
             debug_mode: false,
             log_level: "info".to_string(),
+            first_run_complete: true,
         }
     }
 }
@@ -130,12 +135,20 @@ fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
 
 pub fn load_settings(app: &AppHandle) -> AppSettings {
     let Ok(path) = settings_path(app) else {
-        return AppSettings::default();
+        let mut settings = AppSettings::default();
+        settings.first_run_complete = false;
+        return settings;
     };
     let Ok(raw) = fs::read_to_string(path) else {
-        return AppSettings::default();
+        let mut settings = AppSettings::default();
+        settings.first_run_complete = false;
+        return settings;
     };
-    serde_json::from_str(&raw).unwrap_or_else(|_| AppSettings::default())
+    serde_json::from_str(&raw).unwrap_or_else(|_| {
+        let mut settings = AppSettings::default();
+        settings.first_run_complete = false;
+        settings
+    })
 }
 
 fn persist_settings(app: &AppHandle, settings: &AppSettings) -> Result<(), String> {
@@ -250,11 +263,7 @@ fn read_log_excerpt_wsl(path: &str, max_lines: usize) -> Result<String, String> 
         ));
     }
     let raw = String::from_utf8_lossy(&output.stdout);
-    let redacted = raw
-        .lines()
-        .map(redact_line)
-        .collect::<Vec<_>>()
-        .join("\n");
+    let redacted = raw.lines().map(redact_line).collect::<Vec<_>>().join("\n");
     Ok(redacted)
 }
 
@@ -297,6 +306,37 @@ fn redact_after_key(line: &str, key: &str) -> Option<String> {
     let split = start + key.len() + delimiter_offset + 1;
     Some(format!("{} [REDACTED]", line[..split].trim_end()))
 }
+
+#[tauri::command]
+pub async fn list_wsl_distros(_app: AppHandle) -> Result<Vec<String>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let output = Command::new("wsl.exe")
+            .args(["-l", "-q"])
+            .output()
+            .map_err(|err| format!("Unable to list WSL distros: {err}"))?;
+        if !output.status.success() {
+            return Err(format!(
+                "wsl.exe -l -q failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+        let raw = String::from_utf8_lossy(&output.stdout);
+        let distros = raw
+            .lines()
+            .map(|line| line.trim())
+            .filter(|line| !line.is_empty())
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>();
+        Ok(distros)
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("WSL distro listing is only available on Windows".to_string())
+    }
+}
+
 #[tauri::command]
 pub async fn daemon_start(_app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     let mut guard = state
@@ -309,7 +349,10 @@ pub async fn daemon_start(_app: AppHandle, state: State<'_, AppState>) -> Result
         }
     }
 
-    match DaemonManager::start(&guard.settings.transport) {
+    match DaemonManager::start(
+        &guard.settings.transport,
+        guard.settings.wsl_distro.as_deref(),
+    ) {
         Ok(manager) => {
             if let Err(err) = validate_daemon_hello(&manager) {
                 let _ = manager.stop();
@@ -353,7 +396,10 @@ pub async fn daemon_restart(_app: AppHandle, state: State<'_, AppState>) -> Resu
     }
     guard.manager = None;
 
-    match DaemonManager::start(&guard.settings.transport) {
+    match DaemonManager::start(
+        &guard.settings.transport,
+        guard.settings.wsl_distro.as_deref(),
+    ) {
         Ok(manager) => {
             if let Err(err) = validate_daemon_hello(&manager) {
                 let _ = manager.stop();
@@ -479,25 +525,31 @@ pub async fn export_diagnostics(
         let daemon_running = manager.map(|manager| manager.is_running()).unwrap_or(false);
 
         let health_result = match (daemon_running, manager) {
-            (true, Some(manager)) => {
-                manager.call("health.get".to_string(), Value::Null, Duration::from_secs(5))
-            }
+            (true, Some(manager)) => manager.call(
+                "health.get".to_string(),
+                Value::Null,
+                Duration::from_secs(5),
+            ),
             (true, None) => Err("Daemon manager unavailable".to_string()),
             (false, _) => Err("Daemon not running".to_string()),
         };
 
         let stats_result = match (daemon_running, manager) {
-            (true, Some(manager)) => {
-                manager.call("stats.summary".to_string(), Value::Null, Duration::from_secs(5))
-            }
+            (true, Some(manager)) => manager.call(
+                "stats.summary".to_string(),
+                Value::Null,
+                Duration::from_secs(5),
+            ),
             (true, None) => Err("Daemon manager unavailable".to_string()),
             (false, _) => Err("Daemon not running".to_string()),
         };
 
         let config_result = match (daemon_running, manager) {
-            (true, Some(manager)) => {
-                manager.call("config.get".to_string(), Value::Null, Duration::from_secs(5))
-            }
+            (true, Some(manager)) => manager.call(
+                "config.get".to_string(),
+                Value::Null,
+                Duration::from_secs(5),
+            ),
             (true, None) => Err("Daemon manager unavailable".to_string()),
             (false, _) => Err("Daemon not running".to_string()),
         };

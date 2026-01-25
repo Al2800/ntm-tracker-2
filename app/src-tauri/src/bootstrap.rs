@@ -34,7 +34,7 @@ pub fn shutdown(app: &AppHandle) {
 }
 
 async fn ensure_daemon(app: &AppHandle) -> bool {
-    let (transport, already_running) = {
+    let (transport, wsl_distro, already_running) = {
         let state = app.state::<AppState>();
         let guard = match state.0.lock() {
             Ok(guard) => guard,
@@ -45,7 +45,11 @@ async fn ensure_daemon(app: &AppHandle) -> bool {
             .as_ref()
             .map(|manager| manager.is_running())
             .unwrap_or(false);
-        (guard.settings.transport.clone(), already_running)
+        (
+            guard.settings.transport.clone(),
+            guard.settings.wsl_distro.clone(),
+            already_running,
+        )
     };
 
     if already_running {
@@ -54,7 +58,7 @@ async fn ensure_daemon(app: &AppHandle) -> bool {
 
     #[cfg(target_os = "windows")]
     if transport == "wsl-stdio" {
-        if let Err(err) = ensure_wsl_daemon_installed() {
+        if let Err(err) = ensure_wsl_daemon_installed(wsl_distro.as_deref()) {
             let state = app.state::<AppState>();
             let mut guard = match state.0.lock() {
                 Ok(guard) => guard,
@@ -65,11 +69,12 @@ async fn ensure_daemon(app: &AppHandle) -> bool {
         }
     }
 
-    let start_result =
-        tauri::async_runtime::spawn_blocking(move || DaemonManager::start(&transport))
-            .await
-            .map_err(|err| format!("daemon start task failed: {err}"))
-            .and_then(|result| result);
+    let start_result = tauri::async_runtime::spawn_blocking(move || {
+        DaemonManager::start(&transport, wsl_distro.as_deref())
+    })
+    .await
+    .map_err(|err| format!("daemon start task failed: {err}"))
+    .and_then(|result| result);
 
     let state = app.state::<AppState>();
     let mut guard = match state.0.lock() {
@@ -96,7 +101,7 @@ async fn ensure_daemon(app: &AppHandle) -> bool {
 }
 
 #[cfg(target_os = "windows")]
-fn ensure_wsl_daemon_installed() -> Result<(), String> {
+fn ensure_wsl_daemon_installed(wsl_distro: Option<&str>) -> Result<(), String> {
     // If the daemon is already on PATH inside WSL, only ensure directories exist.
     let version = env!("CARGO_PKG_VERSION");
     let release_tag = format!("v{version}");
@@ -133,7 +138,13 @@ mv "$tmp" "$BIN"
         url = download_url
     );
 
-    let output = Command::new("wsl.exe")
+    let mut cmd = Command::new("wsl.exe");
+    if let Some(distro) = wsl_distro {
+        if !distro.trim().is_empty() {
+            cmd.args(["-d", distro]);
+        }
+    }
+    let output = cmd
         .args(["--", "sh", "-lc", &script])
         .output()
         .map_err(|err| format!("Unable to run WSL bootstrap: {err}"))?;
@@ -149,7 +160,7 @@ mv "$tmp" "$BIN"
 }
 
 #[cfg(not(target_os = "windows"))]
-fn ensure_wsl_daemon_installed() -> Result<(), String> {
+fn ensure_wsl_daemon_installed(_wsl_distro: Option<&str>) -> Result<(), String> {
     Ok(())
 }
 

@@ -22,10 +22,11 @@ struct DaemonVersionRecord {
 pub fn start(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         let upgrade_app = app.clone();
-        let result = tauri::async_runtime::spawn_blocking(move || ensure_daemon_version(&upgrade_app))
-            .await
-            .map_err(|err| format!("upgrade task failed: {err}"))
-            .and_then(|result| result);
+        let result =
+            tauri::async_runtime::spawn_blocking(move || ensure_daemon_version(&upgrade_app))
+                .await
+                .map_err(|err| format!("upgrade task failed: {err}"))
+                .and_then(|result| result);
 
         if let Err(err) = result {
             if let Ok(state) = std::panic::catch_unwind(|| app.state::<AppState>()) {
@@ -152,7 +153,7 @@ fn parse_status(output: &str) -> (String, Option<String>) {
 
 #[cfg(target_os = "windows")]
 fn health_check() -> Result<(), String> {
-    let manager = DaemonManager::start("wsl-stdio")?;
+    let manager = DaemonManager::start("wsl-stdio", None)?;
     let timeout = Duration::from_secs(5);
     let response = manager
         .call("health.get".to_string(), Value::Null, timeout)
@@ -210,7 +211,11 @@ echo "rolled_back:$version"
 }
 
 #[cfg(target_os = "windows")]
-fn write_version_record(app: &AppHandle, daemon_version: Option<String>, status: &str) -> Result<(), String> {
+fn write_version_record(
+    app: &AppHandle,
+    daemon_version: Option<String>,
+    status: &str,
+) -> Result<(), String> {
     let dir = app
         .path()
         .app_config_dir()

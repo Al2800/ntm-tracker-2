@@ -1,16 +1,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod bootstrap;
 mod autostart;
+mod bootstrap;
 mod commands;
 mod daemon;
-mod upgrade;
 mod transport;
 mod tray;
+mod upgrade;
 
 use commands::{
-    daemon_health, daemon_restart, daemon_start, daemon_stop, export_diagnostics, get_attach_command,
-    get_settings, load_settings, rpc_call, set_settings, AppState,
+    daemon_health, daemon_restart, daemon_start, daemon_stop, export_diagnostics,
+    get_attach_command, get_settings, list_wsl_distros, load_settings, rpc_call, set_settings,
+    AppState,
 };
 use tauri::Manager;
 
@@ -38,6 +39,7 @@ fn main() {
             daemon_restart,
             daemon_health,
             rpc_call,
+            list_wsl_distros,
             get_settings,
             set_settings,
             export_diagnostics,

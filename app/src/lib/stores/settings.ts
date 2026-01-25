@@ -4,6 +4,7 @@ import { getSettings, setSettings } from '../tauri';
 
 const defaultSettings: AppSettings = {
   transport: 'wsl-stdio',
+  wslDistro: null,
   reconnectIntervalMs: 5000,
   autostartEnabled: true,
   showNotifications: true,
@@ -14,10 +15,12 @@ const defaultSettings: AppSettings = {
   notificationMaxPerHour: 10,
   theme: 'system',
   debugMode: false,
-  logLevel: 'info'
+  logLevel: 'info',
+  firstRunComplete: true
 };
 
 const settingsStore = writable<AppSettings>(defaultSettings);
+const settingsReadyStore = writable(false);
 
 let initialized = false;
 let hydrating = false;
@@ -27,6 +30,10 @@ export const settings = {
   subscribe: settingsStore.subscribe,
   set: settingsStore.set,
   update: settingsStore.update
+};
+
+export const settingsReady = {
+  subscribe: settingsReadyStore.subscribe
 };
 
 export const resetSettings = () => settingsStore.set(defaultSettings);
@@ -51,6 +58,7 @@ export const initSettings = () => {
       // Keep defaults if unavailable.
     } finally {
       hydrating = false;
+      settingsReadyStore.set(true);
     }
   })();
 
