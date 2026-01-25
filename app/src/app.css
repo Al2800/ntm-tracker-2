@@ -1,3 +1,112 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * ═══════════════════════════════════════════════════════════════════════════
+ * NTM TRACKER DESIGN TOKENS - Component Layer
+ * See tailwind.config.cjs for token definitions
+ * See docs/ui-patterns-codexmonitor.md for design rationale
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+@layer components {
+  /*
+   * ──────────────────────────────────────────────────────────────────────────
+   * CARD COMPONENT
+   * Standard card with border, background, and radius
+   * ──────────────────────────────────────────────────────────────────────────
+   */
+  .card {
+    @apply rounded-card border border-border bg-surface-raised p-card-md;
+  }
+  .card-lg {
+    @apply rounded-card-lg border border-border bg-surface-raised p-card-lg;
+  }
+  .card-compact {
+    @apply rounded-card border border-border bg-surface-raised p-card-sm;
+  }
+
+  /*
+   * ──────────────────────────────────────────────────────────────────────────
+   * LABEL / HEADER STYLES
+   * Uppercase tracking for section headers and labels
+   * ──────────────────────────────────────────────────────────────────────────
+   */
+  .label {
+    @apply text-xs font-semibold uppercase tracking-label text-text-muted;
+  }
+  .label-sm {
+    @apply text-2xs font-medium uppercase tracking-label-tight text-text-subtle;
+  }
+  .label-lg {
+    @apply text-sm font-semibold uppercase tracking-label-wide text-text-secondary;
+  }
+
+  /*
+   * ──────────────────────────────────────────────────────────────────────────
+   * STATUS BADGE
+   * Connection/status indicator badges
+   * ──────────────────────────────────────────────────────────────────────────
+   */
+  .badge {
+    @apply inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ring-1;
+  }
+  .badge-success {
+    @apply bg-status-success-muted text-status-success-text ring-status-success-ring;
+  }
+  .badge-warning {
+    @apply bg-status-warning-muted text-status-warning-text ring-status-warning-ring;
+  }
+  .badge-error {
+    @apply bg-status-error-muted text-status-error-text ring-status-error-ring;
+  }
+  .badge-info {
+    @apply bg-status-info-muted text-status-info-text ring-status-info-ring;
+  }
+  .badge-neutral {
+    @apply bg-status-neutral-muted text-status-neutral-text ring-status-neutral-ring;
+  }
+
+  /*
+   * ──────────────────────────────────────────────────────────────────────────
+   * BUTTON STYLES
+   * Standard interactive buttons
+   * ──────────────────────────────────────────────────────────────────────────
+   */
+  .btn {
+    @apply inline-flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-border-focus focus:ring-offset-2 focus:ring-offset-surface-base;
+  }
+  .btn-primary {
+    @apply border-accent bg-accent text-text-inverse hover:bg-accent-hover;
+  }
+  .btn-secondary {
+    @apply border-border bg-surface-base text-text-primary hover:border-border-strong;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent text-text-secondary hover:bg-surface-raised hover:text-text-primary;
+  }
+
+  /*
+   * ──────────────────────────────────────────────────────────────────────────
+   * INPUT STYLES
+   * Form inputs with consistent styling
+   * ──────────────────────────────────────────────────────────────────────────
+   */
+  .input {
+    @apply w-full rounded-lg border border-border bg-surface-base px-3 py-2 text-sm text-text-primary placeholder:text-text-subtle focus:border-border-focus focus:outline-none focus:ring-1 focus:ring-border-focus;
+  }
+
+  /*
+   * ──────────────────────────────────────────────────────────────────────────
+   * TRAY-SPECIFIC COMPACT STYLES
+   * Ultra-compact styles for tray popover
+   * ──────────────────────────────────────────────────────────────────────────
+   */
+  .tray-item {
+    @apply flex items-center justify-between rounded-lg border border-border bg-surface-base px-3 py-2 text-sm;
+  }
+  .tray-item-compact {
+    @apply flex items-center justify-between rounded border border-border bg-surface-base px-2 py-1 text-xs;
+  }
+}
