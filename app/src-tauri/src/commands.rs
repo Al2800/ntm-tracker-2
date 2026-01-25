@@ -11,7 +11,7 @@ use std::{
     sync::Mutex,
     time::Duration,
 };
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -110,10 +110,10 @@ impl Default for AppState {
 }
 
 fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let resolver = app.path_resolver();
-    let dir = resolver
+    let dir = app
+        .path()
         .app_config_dir()
-        .ok_or_else(|| "Unable to resolve app config directory".to_string())?;
+        .map_err(|err| format!("Unable to resolve app config directory: {err}"))?;
     fs::create_dir_all(&dir).map_err(|err| format!("Unable to create config directory: {err}"))?;
     Ok(dir.join("settings.json"))
 }
@@ -560,8 +560,8 @@ pub async fn export_diagnostics(
 
     let log_text = log_path
         .map(|path| read_log_excerpt(&path, 500))
-        .transpose()
-        .unwrap_or_else(|| Ok("No log file configured.".to_string()))?;
+        .transpose()?
+        .unwrap_or_else(|| "No log file configured.".to_string());
     fs::write(bundle_dir.join("recent_logs.txt"), log_text)
         .map_err(|err| format!("Unable to write diagnostics: {err}"))?;
 

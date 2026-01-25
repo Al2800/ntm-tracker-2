@@ -6,12 +6,12 @@ Windows run.
 
 ## Environment
 
-- Windows version: ____________________________
-- Machine / VM: _______________________________
-- WSL distro(s): ______________________________
-- Node.js version: ____________________________
-- Rust version: _______________________________
-- Tauri CLI version: __________________________
+- Windows version: Windows 11 Build 26200
+- Machine / VM: Native
+- WSL distro(s): Ubuntu (WSL 2.6.1.0)
+- Node.js version: v22.20.0
+- Rust version: 1.91.1
+- npm version: 11.6.2
 
 ## Build
 
@@ -33,14 +33,26 @@ Optional signing:
 ./scripts/build.ps1 -Profile Release -Sign -PfxPath "C:\path\cert.pfx" -PfxPassword "***"
 ```
 
-### Results
+### Results (2026-01-25)
 
-- Build command completed: ☐ Yes / ☐ No
-- MSI path(s) produced:
-  - ___________________________________________
-  - ___________________________________________
-- Build errors (if any):
-  - ___________________________________________
+- Build command completed: ☒ No (Rust compilation failed)
+- MSI path(s) produced: None
+- Frontend build: ✅ Succeeded (Svelte + Vite)
+- Backend build: ❌ Failed (Tauri Rust)
+
+**Rust Compilation Errors:**
+1. `resolver::Resolver` - wrong import path
+2. `BundleDirNotFound` - missing error type
+3. `path_resolver` method not found (Tauri 2 API change)
+4. `IntoClientRequest` trait not implemented for `tauri::Url`
+5. WebSocket `Message::Text` type mismatches (Utf8Bytes vs String)
+
+**Root Cause:** Tauri app code has API incompatibilities with Tauri 2.x.
+
+**Fixes Required (see bd-2ml.4.15.1):**
+- Update commands.rs for Tauri 2 path resolver API
+- Fix resolver imports
+- Update WebSocket code for tungstenite 0.27+ API changes
 
 ## Install
 
