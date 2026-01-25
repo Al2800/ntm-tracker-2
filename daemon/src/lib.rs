@@ -9,6 +9,7 @@ pub mod config;
 pub mod db;
 pub mod detector;
 pub mod logging;
+pub mod maintenance;
 pub mod metrics;
 pub mod models;
 pub mod ntm;

@@ -3,6 +3,7 @@ use ntm_tracker_daemon::cache::Cache;
 use ntm_tracker_daemon::cli::{self, OutputFormat, DEFAULT_PORT};
 use ntm_tracker_daemon::config::ConfigManager;
 use ntm_tracker_daemon::logging;
+use ntm_tracker_daemon::maintenance;
 use ntm_tracker_daemon::rpc::RpcContext;
 use ntm_tracker_daemon::service::{InstanceGuard, ShutdownHandler};
 use ntm_tracker_daemon::transport;
@@ -220,6 +221,15 @@ async fn run_daemon(
 
     // Create shutdown handler for graceful shutdown
     let shutdown_handler = ShutdownHandler::new();
+
+    let maintenance_runner = maintenance::MaintenanceRunner::new(
+        ntm_tracker_daemon::service::data_dir().join("ntm-tracker.db"),
+        ctx.config.current().maintenance,
+    );
+    let maintenance_shutdown = shutdown_handler.subscribe();
+    tokio::spawn(async move {
+        maintenance_runner.run_loop(maintenance_shutdown).await;
+    });
 
     // Determine which transports to start
     let use_stdio = stdio || (ws_port.is_none() && http_port.is_none());

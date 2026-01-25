@@ -127,6 +127,36 @@ impl Default for LoggingConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
+pub struct MaintenanceConfig {
+    /// Rollup cadence for hourly/daily stats.
+    pub rollup_interval_ms: u64,
+    /// Vacuum interval in hours.
+    pub vacuum_interval_hours: u64,
+    /// Retention for minute samples (hours).
+    pub minute_samples_retention_hours: u64,
+    /// Retention for events (days).
+    pub events_retention_days: u64,
+    /// Retention for ended sessions (days).
+    pub sessions_retention_days: u64,
+    /// Maximum database size before aggressive pruning (MB).
+    pub max_db_mb: u64,
+}
+
+impl Default for MaintenanceConfig {
+    fn default() -> Self {
+        Self {
+            rollup_interval_ms: 3_600_000,
+            vacuum_interval_hours: 168,
+            minute_samples_retention_hours: 72,
+            events_retention_days: 30,
+            sessions_retention_days: 90,
+            max_db_mb: 512,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
 pub struct DaemonConfig {
     pub server: ServerConfig,
     pub polling: PollingConfig,
@@ -134,6 +164,7 @@ pub struct DaemonConfig {
     pub security: SecurityConfig,
     pub privacy: PrivacyConfig,
     pub logging: LoggingConfig,
+    pub maintenance: MaintenanceConfig,
 }
 
 impl Default for DaemonConfig {
@@ -145,6 +176,7 @@ impl Default for DaemonConfig {
             security: SecurityConfig::default(),
             privacy: PrivacyConfig::default(),
             logging: LoggingConfig::default(),
+            maintenance: MaintenanceConfig::default(),
         }
     }
 }
@@ -219,6 +251,42 @@ impl DaemonConfig {
                 self.logging.max_files = parsed;
             }
         }
+
+        if let Ok(interval) = env::var("NTM_TRACKER_MAINTENANCE_ROLLUP_INTERVAL_MS") {
+            if let Ok(parsed) = interval.trim().parse::<u64>() {
+                self.maintenance.rollup_interval_ms = parsed;
+            }
+        }
+
+        if let Ok(hours) = env::var("NTM_TRACKER_MAINTENANCE_VACUUM_INTERVAL_HOURS") {
+            if let Ok(parsed) = hours.trim().parse::<u64>() {
+                self.maintenance.vacuum_interval_hours = parsed;
+            }
+        }
+
+        if let Ok(hours) = env::var("NTM_TRACKER_MAINTENANCE_MINUTE_SAMPLES_RETENTION_HOURS") {
+            if let Ok(parsed) = hours.trim().parse::<u64>() {
+                self.maintenance.minute_samples_retention_hours = parsed;
+            }
+        }
+
+        if let Ok(days) = env::var("NTM_TRACKER_MAINTENANCE_EVENTS_RETENTION_DAYS") {
+            if let Ok(parsed) = days.trim().parse::<u64>() {
+                self.maintenance.events_retention_days = parsed;
+            }
+        }
+
+        if let Ok(days) = env::var("NTM_TRACKER_MAINTENANCE_SESSIONS_RETENTION_DAYS") {
+            if let Ok(parsed) = days.trim().parse::<u64>() {
+                self.maintenance.sessions_retention_days = parsed;
+            }
+        }
+
+        if let Ok(max_mb) = env::var("NTM_TRACKER_MAINTENANCE_MAX_DB_MB") {
+            if let Ok(parsed) = max_mb.trim().parse::<u64>() {
+                self.maintenance.max_db_mb = parsed;
+            }
+        }
     }
 
     pub fn validate(&self) -> Result<(), ConfigError> {
@@ -250,6 +318,36 @@ impl DaemonConfig {
         if self.logging.format != "text" && self.logging.format != "json" {
             return Err(ConfigError::new(
                 "logging.format must be either 'text' or 'json'",
+            ));
+        }
+
+        if self.maintenance.rollup_interval_ms < 60_000 {
+            return Err(ConfigError::new(
+                "maintenance.rollup-interval-ms must be >= 60000",
+            ));
+        }
+
+        if self.maintenance.vacuum_interval_hours == 0 {
+            return Err(ConfigError::new(
+                "maintenance.vacuum-interval-hours must be >= 1",
+            ));
+        }
+
+        if self.maintenance.minute_samples_retention_hours == 0 {
+            return Err(ConfigError::new(
+                "maintenance.minute-samples-retention-hours must be >= 1",
+            ));
+        }
+
+        if self.maintenance.events_retention_days == 0 {
+            return Err(ConfigError::new(
+                "maintenance.events-retention-days must be >= 1",
+            ));
+        }
+
+        if self.maintenance.sessions_retention_days == 0 {
+            return Err(ConfigError::new(
+                "maintenance.sessions-retention-days must be >= 1",
             ));
         }
 
