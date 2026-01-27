@@ -226,7 +226,7 @@ impl WsServer {
             loop {
                 tokio::select! {
                     Some(msg) = rx.recv() => {
-                        if let Err(e) = write.send(Message::Text(msg.into())).await {
+                        if let Err(e) = write.send(Message::text(msg)).await {
                             debug!(error = %e, "failed to send message");
                             break;
                         }
@@ -252,7 +252,7 @@ impl WsServer {
                 msg = read.next() => {
                     match msg {
                         Some(Ok(Message::Text(text))) => {
-                            let text_str = text.to_string();
+                            let text_str = text.as_str().to_string();
                             trace!(addr = %addr, msg = %text_str, "received message");
                             if let Some(response) = self.process_message(&text_str, &client_ctx) {
                                 let json = serde_json::to_string(&response)?;

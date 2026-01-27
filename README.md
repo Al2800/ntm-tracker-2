@@ -82,14 +82,15 @@ See `docs/troubleshooting.md` for WSL connectivity tips, stdio fallback, and dia
 
 ## Docs
 
-- Installation: `docs/install.md`
+- MSI build + install validation: `docs/msi-validation.md`
 - Configuration: `docs/configuration.md`
 - Troubleshooting: `docs/troubleshooting.md`
-- Architecture overview: `docs/architecture.md`
-- Demo capture guide: `docs/demo.md`
-- Release checklist: `docs/release-checklist.md`
+- Architecture overview: `docs/information-architecture.md`
+- Transport validation: `docs/transport-validation.md`
+- Stdio validation spike: `docs/stdio-validation.md`
+- QA checklist: `docs/qa-checklist.md`
+- Release signing: `docs/release-signing.md`
 - Full technical spec: `PLAN.md`
-- Changelog: `CHANGELOG.md`
 
 ## Contributing
 
