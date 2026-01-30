@@ -13,6 +13,17 @@ use std::{
 };
 use tauri::{AppHandle, Manager, State};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+#[cfg(target_os = "windows")]
+fn set_no_window(command: &mut Command) {
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppSettings {
@@ -195,7 +206,9 @@ fn write_json(path: &Path, value: &Value) -> Result<(), String> {
 fn os_version() -> Option<String> {
     #[cfg(target_os = "windows")]
     {
-        let output = Command::new("cmd").args(["/C", "ver"]).output().ok()?;
+        let mut cmd = Command::new("cmd");
+        set_no_window(&mut cmd);
+        let output = cmd.args(["/C", "ver"]).output().ok()?;
         if output.status.success() {
             return Some(String::from_utf8_lossy(&output.stdout).trim().to_string());
         }
@@ -252,7 +265,9 @@ fn read_log_excerpt_local(path: &Path, max_lines: usize) -> Result<String, Strin
 #[cfg(target_os = "windows")]
 fn read_log_excerpt_wsl(path: &str, max_lines: usize) -> Result<String, String> {
     let command = format!("tail -n {max_lines} {}", shell_escape(path));
-    let output = Command::new("wsl.exe")
+    let mut cmd = Command::new("wsl.exe");
+    set_no_window(&mut cmd);
+    let output = cmd
         .args(["--", "sh", "-lc", &command])
         .output()
         .map_err(|err| format!("Unable to read logs via WSL: {err}"))?;
@@ -324,7 +339,9 @@ fn redact_after_key(line: &str, key: &str) -> Option<String> {
 pub async fn list_wsl_distros(_app: AppHandle) -> Result<Vec<String>, String> {
     #[cfg(target_os = "windows")]
     {
-        let output = Command::new("wsl.exe")
+        let mut cmd = Command::new("wsl.exe");
+        set_no_window(&mut cmd);
+        let output = cmd
             .args(["-l", "-q"])
             .output()
             .map_err(|err| format!("Unable to list WSL distros: {err}"))?;

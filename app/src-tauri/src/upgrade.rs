@@ -9,6 +9,17 @@ use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+#[cfg(target_os = "windows")]
+fn set_no_window(command: &mut Command) {
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
 const DAEMON_BIN_NAME: &str = "ntm-tracker-daemon";
 
 #[derive(Debug, Serialize)]
@@ -103,7 +114,9 @@ echo "upgraded:$TARGET_VERSION"
         version = app_version
     );
 
-    let output = Command::new("wsl.exe")
+    let mut cmd = Command::new("wsl.exe");
+    set_no_window(&mut cmd);
+    let output = cmd
         .args(["--", "sh", "-lc", &script])
         .output()
         .map_err(|err| format!("Unable to run WSL upgrade: {err}"))?;
@@ -191,7 +204,9 @@ echo "rolled_back:$version"
         bin = DAEMON_BIN_NAME
     );
 
-    let output = Command::new("wsl.exe")
+    let mut cmd = Command::new("wsl.exe");
+    set_no_window(&mut cmd);
+    let output = cmd
         .args(["--", "sh", "-lc", &script])
         .output()
         .map_err(|err| format!("Unable to run WSL rollback: {err}"))?;

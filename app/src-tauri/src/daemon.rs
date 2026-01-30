@@ -4,6 +4,17 @@ use serde_json::Value;
 use std::process::Command;
 use std::time::Duration;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+#[cfg(target_os = "windows")]
+fn set_no_window(command: &mut Command) {
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
 #[derive(Debug)]
 pub enum DaemonManager {
     Stdio(StdioTransport),
@@ -47,6 +58,7 @@ impl DaemonManager {
 #[cfg(target_os = "windows")]
 fn wsl_stdio_command(wsl_distro: Option<&str>) -> Command {
     let mut cmd = Command::new("wsl.exe");
+    set_no_window(&mut cmd);
     if let Some(distro) = wsl_distro {
         if !distro.trim().is_empty() {
             cmd.args(["-d", distro]);

@@ -4,6 +4,17 @@ use std::process::Command;
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+#[cfg(target_os = "windows")]
+fn set_no_window(command: &mut Command) {
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
 const STARTUP_RETRY_FLOOR_MS: u64 = 1_000;
 const DAEMON_BIN_NAME: &str = "ntm-tracker-daemon";
 
@@ -140,6 +151,7 @@ mv "$tmp" "$BIN"
     );
 
     let mut cmd = Command::new("wsl.exe");
+    set_no_window(&mut cmd);
     if let Some(distro) = wsl_distro {
         if !distro.trim().is_empty() {
             cmd.args(["-d", distro]);
