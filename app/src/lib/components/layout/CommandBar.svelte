@@ -5,7 +5,7 @@
 -->
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { onMount } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import { connectionState, lastConnectionError } from '$lib/stores/connection';
   import { settings, updateSettings } from '$lib/stores/settings';
   import { events } from '$lib/stores/events';
@@ -14,6 +14,7 @@
   export let focusSearch = false;
   let searchInput: HTMLInputElement | null = null;
   let focusApplied = false;
+  const dispatch = createEventDispatcher<{ openHealth: void }>();
 
   // Connection status styling
   const connectionLabel: Record<string, string> = {
@@ -135,18 +136,20 @@
 
     <!-- Connection status badge -->
     <div class="flex items-center gap-2" role="status" aria-live="polite">
-      <span
-        class="badge"
+      <button
+        type="button"
+        class="badge focus-ring cursor-pointer"
         class:badge-success={$connectionState === 'connected'}
         class:badge-info={$connectionState === 'connecting'}
         class:badge-warning={$connectionState === 'reconnecting'}
         class:badge-error={$connectionState === 'degraded'}
         class:badge-neutral={$connectionState === 'disconnected'}
-        title={$lastConnectionError || undefined}
+        title={$lastConnectionError || 'Open health center'}
         aria-label="Connection status: {connectionLabel[$connectionState] ?? 'Unknown'}"
+        on:click={() => dispatch('openHealth')}
       >
         {connectionLabel[$connectionState] ?? 'Unknown'}
-      </span>
+      </button>
     </div>
   </div>
 </div>

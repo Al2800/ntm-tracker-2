@@ -18,10 +18,12 @@
   import PaneList from '$lib/components/PaneList.svelte';
   import OutputPreview from '$lib/components/OutputPreview.svelte';
   import EmptyState from '$lib/components/states/EmptyState.svelte';
+  import HealthCenter from '$lib/components/HealthCenter.svelte';
 
   let query = '';
   let selectedPaneId: string | null = null;
   let lastSelectedSessionId: string | null = null;
+  let healthCenterOpen = false;
 
   $: connectionStatus = getConnectionStatus($connectionState);
   $: focusRequested = $page.url.searchParams.get('focusSearch') === '1';
@@ -114,7 +116,11 @@
 
 <DashboardLayout>
   <svelte:fragment slot="command-bar">
-    <CommandBar bind:searchValue={query} focusSearch={focusRequested} />
+    <CommandBar
+      bind:searchValue={query}
+      focusSearch={focusRequested}
+      on:openHealth={() => (healthCenterOpen = true)}
+    />
   </svelte:fragment>
 
   <svelte:fragment slot="sidebar">
@@ -363,3 +369,5 @@
     </div>
   </svelte:fragment>
 </DashboardLayout>
+
+<HealthCenter open={healthCenterOpen} on:close={() => (healthCenterOpen = false)} />
