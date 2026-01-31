@@ -4,10 +4,12 @@ use ntm_tracker_daemon::cli::{self, OutputFormat, DEFAULT_PORT};
 use ntm_tracker_daemon::config::ConfigManager;
 use ntm_tracker_daemon::logging;
 use ntm_tracker_daemon::maintenance;
+use ntm_tracker_daemon::rpc::handlers;
 use ntm_tracker_daemon::rpc::RpcContext;
 use ntm_tracker_daemon::service::{InstanceGuard, ShutdownHandler};
 use ntm_tracker_daemon::transport;
 use std::sync::Arc;
+use tokio::sync::mpsc;
 
 #[derive(Debug, Parser)]
 #[command(name = "ntm-tracker-daemon", version, about = "NTM Tracker daemon")]
@@ -273,10 +275,8 @@ async fn run_daemon(
     if use_stdio {
         // stdio is the primary transport when no other is specified
         let (notif_tx, notif_rx) = transport::stdio::notification_channel();
-
-        // Store the sender for later use by collectors/detectors
-        // For now, we'll just drop it since we don't have event sources yet
-        drop(notif_tx);
+        let snapshot_shutdown = shutdown_handler.subscribe();
+        spawn_stdio_snapshot_notifier(ctx.clone(), notif_tx.clone(), snapshot_shutdown);
 
         transport::stdio::run(ctx, notif_rx).await;
     } else {
@@ -292,6 +292,37 @@ async fn run_daemon(
     }
 
     tracing::info!("Daemon shutdown complete");
+}
+
+fn spawn_stdio_snapshot_notifier(
+    ctx: Arc<RpcContext>,
+    notification_tx: mpsc::Sender<transport::JsonRpcNotification>,
+    mut shutdown_rx: tokio::sync::broadcast::Receiver<()>,
+) {
+    let interval_ms = ctx.config.current().polling.snapshot_interval_ms.max(500);
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_millis(interval_ms));
+        loop {
+            tokio::select! {
+                _ = ticker.tick() => {
+                    match handlers::core::snapshot_get(ctx.as_ref()) {
+                        Ok(snapshot) => {
+                            let notification = transport::JsonRpcNotification::new("sessions.snapshot", snapshot);
+                            if notification_tx.send(notification).await.is_err() {
+                                break;
+                            }
+                        }
+                        Err(err) => {
+                            tracing::warn!(error = %err.message, "snapshot notification failed");
+                        }
+                    }
+                }
+                _ = shutdown_rx.recv() => {
+                    break;
+                }
+            }
+        }
+    });
 }
 
 fn config_path_str(config: &ConfigManager) -> String {

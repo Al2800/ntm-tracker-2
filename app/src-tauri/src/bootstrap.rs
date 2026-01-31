@@ -1,4 +1,4 @@
-use crate::commands::AppState;
+use crate::commands::{daemon_event_handler, AppState};
 use crate::daemon::DaemonManager;
 use std::process::Command;
 use std::time::Duration;
@@ -81,8 +81,9 @@ async fn ensure_daemon(app: &AppHandle) -> bool {
         }
     }
 
+    let notification_handler = Some(daemon_event_handler(app));
     let start_result = tauri::async_runtime::spawn_blocking(move || {
-        DaemonManager::start(&transport, wsl_distro.as_deref())
+        DaemonManager::start(&transport, wsl_distro.as_deref(), notification_handler)
     })
     .await
     .map_err(|err| format!("daemon start task failed: {err}"))

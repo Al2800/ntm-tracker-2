@@ -166,7 +166,7 @@ fn parse_status(output: &str) -> (String, Option<String>) {
 
 #[cfg(target_os = "windows")]
 fn health_check() -> Result<(), String> {
-    let manager = DaemonManager::start("wsl-stdio", None)?;
+    let manager = DaemonManager::start("wsl-stdio", None, None)?;
     let timeout = Duration::from_secs(5);
     let response = manager
         .call("health.get".to_string(), Value::Null, timeout)

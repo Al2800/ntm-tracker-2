@@ -1,4 +1,4 @@
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
@@ -6,6 +6,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+
+pub type NotificationHandler = Arc<dyn Fn(Value) + Send + Sync>;
 
 #[derive(Debug)]
 pub struct StdioTransport {
@@ -16,7 +18,10 @@ pub struct StdioTransport {
 }
 
 impl StdioTransport {
-    pub fn spawn(mut command: Command) -> Result<Self, String> {
+    pub fn spawn(
+        mut command: Command,
+        notification_handler: Option<NotificationHandler>,
+    ) -> Result<Self, String> {
         command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -38,7 +43,7 @@ impl StdioTransport {
         let pending: Arc<Mutex<HashMap<u64, mpsc::Sender<Result<Value, String>>>>> =
             Arc::new(Mutex::new(HashMap::new()));
 
-        start_stdout_reader(stdout, pending.clone());
+        start_stdout_reader(stdout, pending.clone(), notification_handler);
 
         Ok(Self {
             child: Mutex::new(child),
@@ -140,6 +145,7 @@ fn remove_pending(
 fn start_stdout_reader(
     stdout: ChildStdout,
     pending: Arc<Mutex<HashMap<u64, mpsc::Sender<Result<Value, String>>>>>,
+    notification_handler: Option<NotificationHandler>,
 ) {
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
@@ -156,6 +162,16 @@ fn start_stdout_reader(
             };
 
             let Some(id) = value.get("id").and_then(|id| id.as_u64()) else {
+                if let Some(handler) = notification_handler.as_ref() {
+                    if let Some(method) = value.get("method").and_then(|method| method.as_str()) {
+                        let params = value.get("params").cloned().unwrap_or(Value::Null);
+                        let payload = json!({
+                            "method": method,
+                            "params": params,
+                        });
+                        handler(payload);
+                    }
+                }
                 continue;
             };
 

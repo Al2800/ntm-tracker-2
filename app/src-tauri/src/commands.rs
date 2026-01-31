@@ -1,5 +1,6 @@
 use crate::autostart;
 use crate::daemon::DaemonManager;
+use crate::transport::stdio::NotificationHandler;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
@@ -8,6 +9,7 @@ use std::{
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
     process::Command,
+    sync::Arc,
     sync::Mutex,
     time::Duration,
 };
@@ -133,6 +135,13 @@ impl Default for AppState {
     fn default() -> Self {
         Self::new(AppSettings::default())
     }
+}
+
+pub(crate) fn daemon_event_handler(app: &AppHandle) -> NotificationHandler {
+    let app = app.clone();
+    Arc::new(move |payload: Value| {
+        let _ = app.emit_all("daemon-event", payload);
+    })
 }
 
 fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -388,7 +397,7 @@ fn decode_wsl_output(bytes: &[u8]) -> String {
 }
 
 #[tauri::command]
-pub async fn daemon_start(_app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn daemon_start(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     let mut guard = state
         .0
         .lock()
@@ -399,9 +408,11 @@ pub async fn daemon_start(_app: AppHandle, state: State<'_, AppState>) -> Result
         }
     }
 
+    let notification_handler = Some(daemon_event_handler(&app));
     match DaemonManager::start(
         &guard.settings.transport,
         guard.settings.wsl_distro.as_deref(),
+        notification_handler,
     ) {
         Ok(manager) => {
             if let Err(err) = validate_daemon_hello(&manager) {
@@ -436,7 +447,7 @@ pub async fn daemon_stop(_app: AppHandle, state: State<'_, AppState>) -> Result<
 }
 
 #[tauri::command]
-pub async fn daemon_restart(_app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn daemon_restart(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     let mut guard = state
         .0
         .lock()
@@ -446,9 +457,11 @@ pub async fn daemon_restart(_app: AppHandle, state: State<'_, AppState>) -> Resu
     }
     guard.manager = None;
 
+    let notification_handler = Some(daemon_event_handler(&app));
     match DaemonManager::start(
         &guard.settings.transport,
         guard.settings.wsl_distro.as_deref(),
+        notification_handler,
     ) {
         Ok(manager) => {
             if let Err(err) = validate_daemon_hello(&manager) {

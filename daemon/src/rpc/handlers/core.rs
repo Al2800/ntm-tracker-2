@@ -36,14 +36,18 @@ pub fn snapshot_get(ctx: &RpcContext) -> RpcResult<Value> {
     let sessions = sessions::session_views(ctx.cache.as_ref());
     let panes = panes::pane_views(ctx.cache.as_ref());
     let events = events::event_views(ctx.cache.as_ref(), None, None);
-    let stats = stats::summary_payload(ctx.cache.as_ref());
+    let stats_summary = stats::summary_payload(ctx.cache.as_ref());
     let last_event_id = events::last_event_id(ctx.cache.as_ref());
 
     Ok(json!({
         "sessions": sessions,
         "panes": panes,
         "events": events,
-        "stats": stats,
+        "stats": {
+            "summary": stats_summary,
+            "hourly": [],
+            "daily": [],
+        },
         "lastEventId": last_event_id,
     }))
 }

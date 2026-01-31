@@ -1,4 +1,4 @@
-use crate::transport::stdio::StdioTransport;
+use crate::transport::stdio::{NotificationHandler, StdioTransport};
 use crate::transport::ws::WsTransport;
 use serde_json::Value;
 use std::process::Command;
@@ -22,11 +22,16 @@ pub enum DaemonManager {
 }
 
 impl DaemonManager {
-    pub fn start(settings_transport: &str, wsl_distro: Option<&str>) -> Result<Self, String> {
+    pub fn start(
+        settings_transport: &str,
+        wsl_distro: Option<&str>,
+        notification_handler: Option<NotificationHandler>,
+    ) -> Result<Self, String> {
         match settings_transport {
-            "wsl-stdio" => Ok(Self::Stdio(StdioTransport::spawn(wsl_stdio_command(
-                wsl_distro,
-            ))?)),
+            "wsl-stdio" => Ok(Self::Stdio(StdioTransport::spawn(
+                wsl_stdio_command(wsl_distro),
+                notification_handler,
+            )?)),
             "ws" => Ok(Self::Ws(WsTransport::new("ws://127.0.0.1:3847")?)),
             "http" => Err("HTTP transport not implemented yet".to_string()),
             other => Err(format!("Unsupported transport '{other}'")),

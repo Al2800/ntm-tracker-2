@@ -12,6 +12,7 @@ type DaemonEventPayload = {
 };
 
 let unlisten: UnlistenFn | null = null;
+let subscriptionActive = false;
 
 const isStaleCursorError = (error: unknown) =>
   typeof error === 'string' && error.toUpperCase().includes('STALE_CURSOR');
@@ -65,7 +66,10 @@ const handleDaemonEvent = (payload: DaemonEventPayload) => {
 };
 
 export const startDaemonSubscription = async (channels = ['sessions', 'events', 'stats']) => {
+  if (subscriptionActive) return;
+  subscriptionActive = true;
   const sinceEventId = get(lastEventId);
+  let snapshotFetched = false;
 
   try {
     await rpcCallWithRetry('subscribe', { channels, sinceEventId });
@@ -75,9 +79,16 @@ export const startDaemonSubscription = async (channels = ['sessions', 'events', 
       await rpcCallWithRetry('subscribe', { channels, sinceEventId: 0 });
       const snapshot = await rpcCallWithRetry<Record<string, unknown>>('snapshot.get');
       applySnapshot(snapshot);
+      snapshotFetched = true;
     } else {
+      subscriptionActive = false;
       throw error;
     }
+  }
+
+  if (!snapshotFetched && sinceEventId === 0) {
+    const snapshot = await rpcCallWithRetry<Record<string, unknown>>('snapshot.get');
+    applySnapshot(snapshot);
   }
 
   if (!unlisten) {
@@ -92,4 +103,5 @@ export const stopDaemonSubscription = async () => {
     await unlisten();
     unlisten = null;
   }
+  subscriptionActive = false;
 };

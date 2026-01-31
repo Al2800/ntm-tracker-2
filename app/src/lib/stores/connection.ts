@@ -1,6 +1,7 @@
 import { get, writable } from 'svelte/store';
 import type { ConnectionState } from '../types';
 import { daemonHealth, daemonStart } from '../tauri';
+import { startDaemonSubscription, stopDaemonSubscription } from '../daemon/subscribe';
 import { settings } from './settings';
 
 const connectionStateStore = writable<ConnectionState>('disconnected');
@@ -32,6 +33,7 @@ export const setLastConnectionError = (message: string | null) => lastErrorStore
 let connectionLoopRunning = false;
 let reconnectAttempt = 0;
 let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+let subscriptionActive = false;
 
 const scheduleNext = (ms: number, fn: () => void) => {
   if (timeoutHandle) clearTimeout(timeoutHandle);
@@ -66,8 +68,28 @@ export const startConnectionLoop = () => {
         reconnectAttempt = 0;
         connectionStateStore.set('connected');
         lastErrorStore.set(null);
+        if (!subscriptionActive) {
+          try {
+            await startDaemonSubscription();
+            subscriptionActive = true;
+          } catch (error) {
+            const message =
+              error instanceof Error
+                ? error.message
+                : error
+                  ? String(error)
+                  : 'Unable to start daemon subscription';
+            lastErrorStore.set(message);
+            subscriptionActive = false;
+          }
+        }
         scheduleNext(intervalMs, tick);
         return;
+      }
+
+      if (subscriptionActive) {
+        await stopDaemonSubscription();
+        subscriptionActive = false;
       }
 
       if (health.lastError) {
@@ -84,6 +106,10 @@ export const startConnectionLoop = () => {
       }
 
       connectionStateStore.set('reconnecting');
+      if (subscriptionActive) {
+        await stopDaemonSubscription();
+        subscriptionActive = false;
+      }
       await daemonStart();
       reconnectAttempt += 1;
       scheduleNext(backoffMs(intervalMs), tick);
@@ -91,6 +117,11 @@ export const startConnectionLoop = () => {
       const message =
         error instanceof Error ? error.message : error ? String(error) : 'Unable to reach daemon';
       lastErrorStore.set(message);
+
+      if (subscriptionActive) {
+        await stopDaemonSubscription();
+        subscriptionActive = false;
+      }
 
       if (isVersionMismatch(message)) {
         connectionStateStore.set('degraded');
@@ -112,6 +143,10 @@ export const stopConnectionLoop = () => {
   reconnectAttempt = 0;
   if (timeoutHandle) clearTimeout(timeoutHandle);
   timeoutHandle = null;
+  if (subscriptionActive) {
+    void stopDaemonSubscription();
+    subscriptionActive = false;
+  }
   connectionStateStore.set('disconnected');
   lastHealthCheckStore.set(null);
   lastErrorStore.set(null);
