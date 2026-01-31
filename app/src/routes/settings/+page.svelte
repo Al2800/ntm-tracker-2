@@ -59,45 +59,37 @@
   };
 </script>
 
-<main class="min-h-screen bg-slate-950 text-slate-100">
+<main class="min-h-screen bg-surface-base text-text-primary">
   <div class="mx-auto max-w-4xl px-6 py-12">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <p class="text-sm uppercase tracking-[0.3em] text-slate-400">NTM Tracker</p>
-        <h1 class="mt-2 text-3xl font-semibold text-white">Settings</h1>
+        <p class="label">NTM Tracker</p>
+        <h1 class="mt-2 text-3xl font-semibold text-text-primary">Settings</h1>
       </div>
       <div class="flex items-center gap-3">
-        <button
-          class="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm hover:bg-slate-800"
-          on:click={onReset}
-          disabled={saving}
-        >
+        <button class="btn btn-secondary" on:click={onReset} disabled={saving}>
           Reset
         </button>
-        <button
-          class="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-50"
-          on:click={onSave}
-          disabled={saving}
-        >
+        <button class="btn btn-primary" on:click={onSave} disabled={saving}>
           {#if saving}Saving...{:else}Save{/if}
         </button>
       </div>
     </div>
 
     {#if saveError}
-      <div class="mt-6 rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+      <div class="mt-6 card card-critical text-sm text-status-error-text">
         {saveError}
       </div>
     {/if}
 
     <div class="mt-10 space-y-8">
-      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-        <h2 class="text-lg font-semibold text-white">Connection</h2>
+      <section class="card">
+        <h2 class="text-lg font-semibold text-text-primary">Connection</h2>
         <div class="mt-4 grid gap-4 sm:grid-cols-2">
-          <label class="grid gap-2 text-sm text-slate-200">
-            Transport
+          <label class="grid gap-2 text-sm text-text-secondary">
+            <span class="label-sm">Transport</span>
             <select
-              class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              class="input"
               value={$settings.transport}
               on:change={(event) =>
                 updateSettings({
@@ -110,10 +102,10 @@
             </select>
           </label>
 
-          <label class="grid gap-2 text-sm text-slate-200">
-            Reconnect interval (ms)
+          <label class="grid gap-2 text-sm text-text-secondary">
+            <span class="label-sm">Reconnect interval (ms)</span>
             <input
-              class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              class="input"
               type="number"
               min="1000"
               step="250"
@@ -122,19 +114,20 @@
             />
           </label>
 
-          <label class="flex items-center gap-3 text-sm text-slate-200">
+          <label class="flex items-center gap-3 text-sm text-text-secondary">
             <input
               type="checkbox"
               checked={$settings.autostartEnabled}
-              on:change={(event) => updateSettings({ autostartEnabled: parseBool((event.target as HTMLInputElement).checked) })}
+              on:change={(event) =>
+                updateSettings({ autostartEnabled: parseBool((event.target as HTMLInputElement).checked) })}
             />
             Launch on startup
           </label>
 
-          <label class="grid gap-2 text-sm text-slate-200">
-            WSL distro (optional)
+          <label class="grid gap-2 text-sm text-text-secondary">
+            <span class="label-sm">WSL distro (optional)</span>
             <input
-              class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              class="input"
               placeholder="default"
               value={$settings.wslDistro ?? ''}
               on:input={(event) => {
@@ -146,27 +139,29 @@
         </div>
       </section>
 
-      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-        <h2 class="text-lg font-semibold text-white">Onboarding</h2>
-        <div class="mt-3 flex flex-wrap items-center justify-between gap-4 text-sm text-slate-300/80">
-          <p>Re-run the first-run wizard to verify WSL + notifications.</p>
-          <button
-            class="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm hover:bg-slate-800"
-            on:click={runWizard}
-          >
+      <section class="card">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 class="text-lg font-semibold text-text-primary">Onboarding</h2>
+            <p class="mt-1 text-sm text-text-secondary">
+              Re-run the first-run wizard to verify WSL + notifications.
+            </p>
+          </div>
+          <button class="btn btn-secondary" on:click={runWizard}>
             Run wizard
           </button>
         </div>
       </section>
 
-      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-        <h2 class="text-lg font-semibold text-white">Notifications</h2>
-        <div class="mt-4 grid gap-4 text-sm text-slate-200 sm:grid-cols-2">
+      <section class="card">
+        <h2 class="text-lg font-semibold text-text-primary">Notifications</h2>
+        <div class="mt-4 grid gap-4 text-sm text-text-secondary sm:grid-cols-2">
           <label class="flex items-center gap-3">
             <input
               type="checkbox"
               checked={$settings.showNotifications}
-              on:change={(event) => updateSettings({ showNotifications: parseBool((event.target as HTMLInputElement).checked) })}
+              on:change={(event) =>
+                updateSettings({ showNotifications: parseBool((event.target as HTMLInputElement).checked) })}
             />
             Enable notifications
           </label>
@@ -174,7 +169,8 @@
             <input
               type="checkbox"
               checked={$settings.notifyOnCompact}
-              on:change={(event) => updateSettings({ notifyOnCompact: parseBool((event.target as HTMLInputElement).checked) })}
+              on:change={(event) =>
+                updateSettings({ notifyOnCompact: parseBool((event.target as HTMLInputElement).checked) })}
             />
             Notify on compact events
           </label>
@@ -182,15 +178,16 @@
             <input
               type="checkbox"
               checked={$settings.notifyOnEscalation}
-              on:change={(event) => updateSettings({ notifyOnEscalation: parseBool((event.target as HTMLInputElement).checked) })}
+              on:change={(event) =>
+                updateSettings({ notifyOnEscalation: parseBool((event.target as HTMLInputElement).checked) })}
             />
             Notify on escalations
           </label>
 
           <label class="grid gap-2">
-            Quiet hours start (0-23)
+            <span class="label-sm">Quiet hours start (0-23)</span>
             <input
-              class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              class="input"
               type="number"
               min="0"
               max="23"
@@ -199,11 +196,10 @@
               on:input={onHourField('quietHoursStart')}
             />
           </label>
-
           <label class="grid gap-2">
-            Quiet hours end (0-23)
+            <span class="label-sm">Quiet hours end (0-23)</span>
             <input
-              class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              class="input"
               type="number"
               min="0"
               max="23"
@@ -212,11 +208,10 @@
               on:input={onHourField('quietHoursEnd')}
             />
           </label>
-
           <label class="grid gap-2">
-            Max notifications per hour
+            <span class="label-sm">Max notifications / hour</span>
             <input
-              class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              class="input"
               type="number"
               min="1"
               step="1"
@@ -227,66 +222,35 @@
         </div>
       </section>
 
-      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-        <h2 class="text-lg font-semibold text-white">Appearance</h2>
-        <div class="mt-4 grid gap-4 sm:grid-cols-2">
-          <label class="grid gap-2 text-sm text-slate-200">
-            Theme
+      <section class="card">
+        <h2 class="text-lg font-semibold text-text-primary">Appearance</h2>
+        <div class="mt-4 grid gap-4 text-sm text-text-secondary sm:grid-cols-2">
+          <label class="grid gap-2">
+            <span class="label-sm">Theme</span>
             <select
-              class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              class="input"
               value={$settings.theme}
               on:change={(event) =>
-                updateSettings({
-                  theme: (event.target as HTMLSelectElement).value as AppSettings['theme']
-                })}
+                updateSettings({ theme: (event.target as HTMLSelectElement).value as AppSettings['theme'] })}
             >
               {#each themeOptions as option}
                 <option value={option}>{option}</option>
               {/each}
             </select>
           </label>
-        </div>
-      </section>
-
-      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-        <h2 class="text-lg font-semibold text-white">Advanced</h2>
-        <div class="mt-4 grid gap-4 sm:grid-cols-2">
-          <label class="flex items-center gap-3 text-sm text-slate-200">
-            <input
-              type="checkbox"
-              checked={$settings.debugMode}
-              on:change={(event) => updateSettings({ debugMode: parseBool((event.target as HTMLInputElement).checked) })}
-            />
-            Debug mode
-          </label>
-
-          <label class="grid gap-2 text-sm text-slate-200">
-            Log level
+          <label class="grid gap-2">
+            <span class="label-sm">Log level</span>
             <select
-              class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              class="input"
               value={$settings.logLevel}
               on:change={(event) =>
-                updateSettings({
-                  logLevel: (event.target as HTMLSelectElement).value as AppSettings['logLevel']
-                })}
+                updateSettings({ logLevel: (event.target as HTMLSelectElement).value as AppSettings['logLevel'] })}
             >
               {#each logLevelOptions as option}
                 <option value={option}>{option}</option>
               {/each}
             </select>
           </label>
-
-          <div class="text-sm text-slate-300/80 sm:col-span-2">
-            Poll intervals and daemon-side debug flags are not configurable yet.
-          </div>
-        </div>
-      </section>
-
-      <section class="rounded-xl border border-slate-800 bg-slate-900/60 p-6">
-        <h2 class="text-lg font-semibold text-white">About</h2>
-        <div class="mt-3 text-sm text-slate-300/80">
-          Settings are stored in the app config directory and applied immediately.
-          Upgrade checks and detailed version reporting will be added next.
         </div>
       </section>
     </div>

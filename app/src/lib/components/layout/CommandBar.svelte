@@ -11,7 +11,9 @@
   import { events } from '$lib/stores/events';
 
   export let searchValue = '';
-  let searchInput: HTMLInputElement;
+  export let focusSearch = false;
+  let searchInput: HTMLInputElement | null = null;
+  let focusApplied = false;
 
   // Connection status styling
   const connectionLabel: Record<string, string> = {
@@ -26,6 +28,14 @@
   $: pendingCount = $events.filter(
     (e) => e.eventType === 'escalation' && (e.status ?? 'pending') === 'pending'
   ).length;
+
+  $: if (focusSearch && searchInput && !focusApplied) {
+    searchInput.focus();
+    focusApplied = true;
+  }
+  $: if (!focusSearch) {
+    focusApplied = false;
+  }
 
   // Handle Ctrl+K to focus search
   onMount(() => {

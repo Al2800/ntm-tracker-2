@@ -117,63 +117,57 @@
   });
 </script>
 
-<main class="min-h-screen bg-slate-950 text-slate-100">
+<main class="min-h-screen bg-surface-base text-text-primary">
   <div class="mx-auto max-w-3xl px-6 py-12">
     <div class="flex flex-wrap items-center justify-between gap-4">
       <div>
-        <p class="text-sm uppercase tracking-[0.3em] text-slate-400">NTM Tracker</p>
-        <h1 class="mt-2 text-3xl font-semibold text-white">First-run setup</h1>
-        <p class="mt-2 text-sm text-slate-300/80">
+        <p class="label">NTM Tracker</p>
+        <h1 class="mt-2 text-3xl font-semibold text-text-primary">First-run setup</h1>
+        <p class="mt-2 text-sm text-text-secondary">
           This wizard helps verify WSL connectivity, daemon health, and notifications.
         </p>
       </div>
-      <button
-        class="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm hover:bg-slate-800"
-        on:click={skipWizard}
-      >
+      <button class="btn btn-secondary" on:click={skipWizard}>
         Skip
       </button>
     </div>
 
     <div class="mt-8 flex flex-wrap gap-2 text-xs">
       {#each steps as label, index (label)}
-        <span
-          class={`rounded-full px-3 py-1 ${
-            index === stepIndex ? 'bg-sky-500/20 text-sky-200' : 'bg-slate-900 text-slate-300'
-          }`}
-          >{index + 1}. {label}</span
-        >
+        <span class={`chip ${index === stepIndex ? 'chip-active' : 'chip-default'}`}>
+          {index + 1}. {label}
+        </span>
       {/each}
     </div>
 
-    <section class="mt-10 rounded-xl border border-slate-800 bg-slate-900/60 p-6">
+    <section class="mt-10 card">
       {#if step() === 'Welcome'}
-        <h2 class="text-lg font-semibold text-white">Welcome</h2>
-        <p class="mt-3 text-sm text-slate-300/80">
+        <h2 class="text-lg font-semibold text-text-primary">Welcome</h2>
+        <p class="mt-3 text-sm text-text-secondary">
           NTM Tracker watches tmux/NTM sessions inside WSL2 and shows session status, compacts, and
           escalations in your Windows tray.
         </p>
-        <p class="mt-3 text-sm text-slate-300/80">
+        <p class="mt-3 text-sm text-text-secondary">
           Privacy: the app only captures bounded pane output when you request a preview, and redacts
           known secrets server-side.
         </p>
       {:else if step() === 'WSL'}
-        <h2 class="text-lg font-semibold text-white">WSL configuration</h2>
-        <p class="mt-3 text-sm text-slate-300/80">
+        <h2 class="text-lg font-semibold text-text-primary">WSL configuration</h2>
+        <p class="mt-3 text-sm text-text-secondary">
           Select the WSL distro that should host the daemon. If unsure, keep the default.
         </p>
 
         {#if distrosError}
-          <div class="mt-4 rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+          <div class="mt-4 card card-critical text-sm text-status-error-text">
             {distrosError}
           </div>
         {/if}
 
         <div class="mt-4 grid gap-2">
-          <label class="grid gap-2 text-sm text-slate-200">
-            WSL distro
+          <label class="grid gap-2 text-sm text-text-secondary">
+            <span class="label-sm">WSL distro</span>
             <select
-              class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm disabled:opacity-50"
+              class="input"
               bind:value={selectedDistro}
               disabled={distrosLoading || distros.length === 0}
             >
@@ -188,52 +182,44 @@
               {/if}
             </select>
           </label>
-          <p class="text-xs text-slate-400">
+          <p class="text-xs text-text-subtle">
             Current selection is stored in settings and used for WSL invocations.
           </p>
         </div>
       {:else if step() === 'Daemon'}
-        <h2 class="text-lg font-semibold text-white">Daemon installation &amp; health</h2>
-        <p class="mt-3 text-sm text-slate-300/80">
+        <h2 class="text-lg font-semibold text-text-primary">Daemon installation &amp; health</h2>
+        <p class="mt-3 text-sm text-text-secondary">
           The Windows app will bootstrap the daemon inside WSL. Use the buttons below to verify it
           starts successfully.
         </p>
 
         <div class="mt-4 flex flex-wrap gap-3">
-          <button
-            class="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-400 disabled:opacity-50"
-            on:click={startDaemon}
-            disabled={daemonLoading}
-          >
+          <button class="btn btn-primary" on:click={startDaemon} disabled={daemonLoading}>
             Start daemon
           </button>
-          <button
-            class="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-50"
-            on:click={refreshDaemon}
-            disabled={daemonLoading}
-          >
+          <button class="btn btn-secondary" on:click={refreshDaemon} disabled={daemonLoading}>
             Refresh status
           </button>
         </div>
 
-        <div class="mt-4 rounded-lg border border-slate-800 bg-slate-950/40 px-4 py-3 text-sm">
+        <div class="mt-4 card-compact bg-surface-base">
           <div class="flex flex-wrap items-center justify-between gap-3">
-            <span class="font-semibold text-white">Status: {daemonStatus ?? 'unknown'}</span>
+            <span class="font-semibold text-text-primary">Status: {daemonStatus ?? 'unknown'}</span>
             {#if daemonLoading}
-              <span class="text-slate-400">Checking...</span>
+              <span class="text-text-subtle">Checking...</span>
             {/if}
           </div>
           {#if daemonError}
-            <p class="mt-2 text-sm text-rose-200">{daemonError}</p>
+            <p class="mt-2 text-sm text-status-error-text">{daemonError}</p>
           {/if}
         </div>
       {:else if step() === 'Notifications'}
-        <h2 class="text-lg font-semibold text-white">Notifications</h2>
-        <p class="mt-3 text-sm text-slate-300/80">
+        <h2 class="text-lg font-semibold text-text-primary">Notifications</h2>
+        <p class="mt-3 text-sm text-text-secondary">
           Choose which events should show notifications. You can change these anytime in Settings.
         </p>
 
-        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+        <div class="mt-4 grid gap-4 sm:grid-cols-2 text-sm text-text-secondary">
           <label class="flex items-center gap-3">
             <input
               type="checkbox"
@@ -268,20 +254,17 @@
             Notify on escalations
           </label>
           <div class="flex items-center gap-3">
-            <button
-              class="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm hover:bg-slate-800"
-              on:click={testNotification}
-            >
+            <button class="btn btn-secondary" on:click={testNotification}>
               Test notification
             </button>
           </div>
         </div>
       {:else if step() === 'Complete'}
-        <h2 class="text-lg font-semibold text-white">Complete</h2>
-        <p class="mt-3 text-sm text-slate-300/80">
+        <h2 class="text-lg font-semibold text-text-primary">Complete</h2>
+        <p class="mt-3 text-sm text-text-secondary">
           Setup is complete. You can re-run this wizard from Settings anytime.
         </p>
-        <div class="mt-4 rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-sm text-slate-300/80">
+        <div class="mt-4 card-compact bg-surface-base text-sm text-text-secondary">
           <ul class="list-disc space-y-2 pl-6">
             <li>WSL distro: {$settings.wslDistro ?? '(default)'}</li>
             <li>Transport: {$settings.transport}</li>
@@ -293,23 +276,19 @@
 
     <div class="mt-8 flex items-center justify-between">
       <button
-        class="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm hover:bg-slate-800 disabled:opacity-50"
+        class="btn btn-secondary"
         on:click={back}
         disabled={stepIndex === 0}
       >
         Back
       </button>
-      <button
-        class="rounded-lg bg-indigo-500 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-400"
-        on:click={next}
-      >
+      <button class="btn btn-primary" on:click={next}>
         {#if step() === 'Complete'}Finish{:else}Next{/if}
       </button>
     </div>
 
-    <div class="mt-10 text-center text-xs text-slate-500">
-      <button class="underline hover:text-slate-300" on:click={() => goto('/')}>Return to dashboard</button>
+    <div class="mt-10 text-center text-xs text-text-subtle">
+      <button class="underline hover:text-text-secondary" on:click={() => goto('/')}>Return to dashboard</button>
     </div>
   </div>
 </main>
-
