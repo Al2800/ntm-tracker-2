@@ -13,7 +13,7 @@ export interface Pane {
 export interface Session {
   sessionId: string;
   name: string;
-  status: 'active' | 'idle' | 'ended' | 'unknown';
+  status: 'active' | 'idle' | 'waiting' | 'ended' | 'unknown';
   paneCount: number;
   panes?: Pane[];
   lastSeenAt?: number;
