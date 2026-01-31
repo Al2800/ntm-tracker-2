@@ -8,7 +8,7 @@ import { get } from 'svelte/store';
 import type { AppSettings, TrackerEvent } from '../types';
 import { events } from '../stores/events';
 import { settings } from '../stores/settings';
-import { selectSession, sessions } from '../stores/sessions';
+import { mutedSessionIds, selectSession, sessions } from '../stores/sessions';
 
 const DEDUPE_WINDOW_MS = 5 * 60 * 1000;
 const MAX_DEDUPE_ENTRIES = 500;
@@ -39,7 +39,9 @@ const pruneLastByKey = () => {
 let currentSettings: AppSettings = get(settings);
 let unsubscribeEvents: (() => void) | null = null;
 let unsubscribeSettings: (() => void) | null = null;
+let unsubscribeMuted: (() => void) | null = null;
 let unlistenSnooze: UnlistenFn | null = null;
+let currentMuted = new Set<string>();
 
 const isQuietHours = (now: Date) => {
   const hour = now.getHours();
@@ -90,6 +92,7 @@ const ensurePermission = async () => {
 
 const shouldNotify = (event: TrackerEvent) => {
   if (!currentSettings.showNotifications) return false;
+  if (currentMuted.has(event.sessionId)) return false;
   if (event.eventType === 'compact' && !currentSettings.notifyOnCompact) return false;
   if (event.eventType === 'escalation' && !currentSettings.notifyOnEscalation) return false;
   if (isQuietHours(new Date())) return false;
@@ -173,6 +176,9 @@ export const initNotifications = () => {
   unsubscribeSettings = settings.subscribe((next) => {
     currentSettings = next;
   });
+  unsubscribeMuted = mutedSessionIds.subscribe((next) => {
+    currentMuted = new Set(next);
+  });
   void ensurePermission();
   void listen('tray:snooze', () => snoozeForMinutes(15)).then((unlisten) => {
     unlistenSnooze = unlisten;
@@ -185,6 +191,8 @@ export const stopNotifications = () => {
   unsubscribeEvents = null;
   unsubscribeSettings?.();
   unsubscribeSettings = null;
+  unsubscribeMuted?.();
+  unsubscribeMuted = null;
   if (unlistenSnooze) {
     void unlistenSnooze();
     unlistenSnooze = null;

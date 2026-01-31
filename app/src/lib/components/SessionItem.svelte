@@ -9,6 +9,9 @@
 
   export let session: Session;
   export let selected = false;
+  export let pinned = false;
+  export let muted = false;
+  export let alertCount = 0;
 
   const dispatch = createEventDispatcher<{
     select: void;
@@ -45,15 +48,15 @@
 
   let showActions = false;
 
-  function handleCopyAttach() {
-    const cmd = `ntm attach ${session.name}`;
-    navigator.clipboard.writeText(cmd);
-    dispatch('action', 'copy-attach');
+  function handleAction(action: string) {
+    dispatch('action', action);
   }
 </script>
 
 <div
-  role="button"
+  data-session-item
+  id={`session-item-${session.sessionId}`}
+  role="option"
   tabindex="0"
   class="session-item group relative w-full rounded-lg border p-2.5 text-left transition-all focus-ring cursor-pointer"
   class:border-accent={selected}
@@ -73,7 +76,7 @@
     showActions = false;
   }}
   aria-label="Session {session.name}, status {session.status}, {totalCount} pane{totalCount !== 1 ? 's' : ''}"
-  aria-pressed={selected}
+  aria-selected={selected}
 >
   <div class="flex items-start gap-2.5">
     <!-- Status indicator -->
@@ -84,14 +87,31 @@
     <!-- Session info -->
     <div class="min-w-0 flex-1">
       <div class="flex items-center justify-between gap-2">
-        <p class="truncate text-sm font-medium text-text-primary">
-          {session.name}
-        </p>
-        {#if lastSeen}
-          <span class="shrink-0 text-2xs text-text-subtle">
-            {lastSeen}
-          </span>
-        {/if}
+        <div class="flex min-w-0 items-center gap-1">
+          <p class="truncate text-sm font-medium text-text-primary">
+            {session.name}
+          </p>
+          {#if pinned}
+            <span class="text-2xs text-accent" title="Pinned" aria-label="Pinned session">
+              📌
+            </span>
+          {/if}
+        </div>
+        <div class="flex shrink-0 items-center gap-2">
+          {#if alertCount > 0}
+            <span
+              class={`badge badge-warning text-[10px] ${muted ? 'opacity-60' : ''}`}
+              aria-label={`${alertCount} pending escalation${alertCount === 1 ? '' : 's'}`}
+            >
+              {alertCount} alert{alertCount === 1 ? '' : 's'}
+            </span>
+          {/if}
+          {#if lastSeen}
+            <span class="text-2xs text-text-subtle">
+              {lastSeen}
+            </span>
+          {/if}
+        </div>
       </div>
       <div class="mt-0.5 flex items-center gap-2 text-2xs text-text-muted">
         <span class="font-mono">{session.sessionId.slice(0, 8)}</span>
@@ -114,13 +134,44 @@
       <button
         type="button"
         class="rounded bg-surface-elevated p-1 text-text-muted hover:bg-surface-overlay hover:text-text-primary focus-ring"
-        title="Copy attach command"
+        title="Attach to session"
         aria-label="Copy attach command for {session.name}"
-        on:click|stopPropagation={handleCopyAttach}
+        on:click|stopPropagation={() => handleAction('attach')}
       >
         <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
         </svg>
+      </button>
+      <button
+        type="button"
+        class={`rounded bg-surface-elevated p-1 focus-ring ${
+          pinned ? 'text-accent' : 'text-text-muted hover:bg-surface-overlay hover:text-text-primary'
+        }`}
+        title={pinned ? 'Unpin session' : 'Pin session'}
+        aria-label={pinned ? 'Unpin session' : 'Pin session'}
+        on:click|stopPropagation={() => handleAction('pin')}
+      >
+        📌
+      </button>
+      <button
+        type="button"
+        class={`rounded bg-surface-elevated p-1 focus-ring ${
+          muted ? 'text-status-warning-text' : 'text-text-muted hover:bg-surface-overlay hover:text-text-primary'
+        }`}
+        title={muted ? 'Unmute alerts' : 'Mute alerts'}
+        aria-label={muted ? 'Unmute alerts for session' : 'Mute alerts for session'}
+        on:click|stopPropagation={() => handleAction('mute')}
+      >
+        {muted ? '🔕' : '🔔'}
+      </button>
+      <button
+        type="button"
+        class="rounded bg-surface-elevated p-1 text-text-muted hover:bg-status-error-muted hover:text-status-error-text focus-ring"
+        title="Kill session"
+        aria-label="Kill session {session.name}"
+        on:click|stopPropagation={() => handleAction('kill')}
+      >
+        ✕
       </button>
     </div>
   {/if}

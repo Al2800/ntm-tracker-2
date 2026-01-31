@@ -13,6 +13,12 @@ type DaemonEventPayload = {
 
 let unlisten: UnlistenFn | null = null;
 let subscriptionActive = false;
+let visibilityTracking = false;
+let isVisible = true;
+let isFocused = true;
+let pendingSnapshot = false;
+let snapshotInFlight = false;
+let visibilityHandler: (() => void) | null = null;
 
 const isStaleCursorError = (error: unknown) =>
   typeof error === 'string' && error.toUpperCase().includes('STALE_CURSOR');
@@ -34,6 +40,58 @@ const applySnapshot = (snapshot: Record<string, unknown>) => {
   }
 };
 
+const updateVisibilityState = () => {
+  if (typeof document !== 'undefined') {
+    isVisible = document.visibilityState !== 'hidden';
+  }
+  if (typeof window !== 'undefined') {
+    isFocused = document.hasFocus();
+  }
+};
+
+const shouldProcessSnapshots = () => isVisible && isFocused;
+
+const refreshSnapshot = async () => {
+  if (snapshotInFlight) return;
+  snapshotInFlight = true;
+  try {
+    const snapshot = await rpcCallWithRetry<Record<string, unknown>>('snapshot.get');
+    applySnapshot(snapshot);
+    pendingSnapshot = false;
+  } finally {
+    snapshotInFlight = false;
+  }
+};
+
+const ensureVisibilityTracking = () => {
+  if (visibilityTracking || typeof document === 'undefined') return;
+  visibilityTracking = true;
+  updateVisibilityState();
+
+  const handleVisibilityChange = () => {
+    updateVisibilityState();
+    if (shouldProcessSnapshots() && pendingSnapshot) {
+      void refreshSnapshot();
+    }
+  };
+  visibilityHandler = handleVisibilityChange;
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('focus', handleVisibilityChange);
+  window.addEventListener('blur', handleVisibilityChange);
+};
+
+const teardownVisibilityTracking = () => {
+  if (!visibilityTracking || typeof document === 'undefined') return;
+  visibilityTracking = false;
+  if (visibilityHandler) {
+    document.removeEventListener('visibilitychange', visibilityHandler);
+    window.removeEventListener('focus', visibilityHandler);
+    window.removeEventListener('blur', visibilityHandler);
+    visibilityHandler = null;
+  }
+};
+
 const handleDaemonEvent = (payload: DaemonEventPayload) => {
   const { method, params } = payload;
   switch (method) {
@@ -43,7 +101,13 @@ const handleDaemonEvent = (payload: DaemonEventPayload) => {
       }
       break;
     case 'sessions.snapshot':
-      if (params) applySnapshot(params);
+      if (params) {
+        if (shouldProcessSnapshots()) {
+          applySnapshot(params);
+        } else {
+          pendingSnapshot = true;
+        }
+      }
       break;
     case 'events':
       if (Array.isArray(params?.events)) {
@@ -70,6 +134,7 @@ export const startDaemonSubscription = async (channels = ['sessions', 'events', 
   subscriptionActive = true;
   const sinceEventId = get(lastEventId);
   let snapshotFetched = false;
+  ensureVisibilityTracking();
 
   try {
     await rpcCallWithRetry('subscribe', { channels, sinceEventId });
@@ -88,7 +153,11 @@ export const startDaemonSubscription = async (channels = ['sessions', 'events', 
 
   if (!snapshotFetched && sinceEventId === 0) {
     const snapshot = await rpcCallWithRetry<Record<string, unknown>>('snapshot.get');
-    applySnapshot(snapshot);
+    if (shouldProcessSnapshots()) {
+      applySnapshot(snapshot);
+    } else {
+      pendingSnapshot = true;
+    }
   }
 
   if (!unlisten) {
@@ -104,4 +173,6 @@ export const stopDaemonSubscription = async () => {
     unlisten = null;
   }
   subscriptionActive = false;
+  teardownVisibilityTracking();
+  pendingSnapshot = false;
 };

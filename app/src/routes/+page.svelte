@@ -6,9 +6,17 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { connectionState } from '$lib/stores/connection';
+  import { connectionState, lastConnectionError } from '$lib/stores/connection';
   import { events } from '$lib/stores/events';
-  import { sessions, selectedSession, selectSession } from '$lib/stores/sessions';
+  import {
+    sessions,
+    selectedSession,
+    selectSession,
+    pinnedSessionIds,
+    mutedSessionIds,
+    togglePinSession,
+    toggleMuteSession
+  } from '$lib/stores/sessions';
   import { settings, updateSettings } from '$lib/stores/settings';
   import { getConnectionStatus, getSessionStatus, sortBySessionStatus } from '$lib/status';
   import { CommandBar, DashboardLayout, Sidebar } from '$lib/components/layout';
@@ -19,11 +27,16 @@
   import OutputPreview from '$lib/components/OutputPreview.svelte';
   import EmptyState from '$lib/components/states/EmptyState.svelte';
   import HealthCenter from '$lib/components/HealthCenter.svelte';
+  import { daemonRestart, getAttachCommand, rpcCallWithRetry } from '$lib/tauri';
+  import type { Session } from '$lib/types';
 
   let query = '';
   let selectedPaneId: string | null = null;
   let lastSelectedSessionId: string | null = null;
   let healthCenterOpen = false;
+  let actionNotice = '';
+  let actionNoticeTimeout: ReturnType<typeof setTimeout> | null = null;
+  let reconnecting = false;
 
   $: connectionStatus = getConnectionStatus($connectionState);
   $: focusRequested = $page.url.searchParams.get('focusSearch') === '1';
@@ -56,6 +69,94 @@
 
   const toggleNotifications = () => {
     updateSettings({ showNotifications: !$settings.showNotifications });
+  };
+
+  const announceAction = (message: string) => {
+    actionNotice = message;
+    if (actionNoticeTimeout) clearTimeout(actionNoticeTimeout);
+    actionNoticeTimeout = setTimeout(() => {
+      actionNotice = '';
+    }, 3000);
+  };
+
+  const triggerReconnect = async () => {
+    if (reconnecting) return;
+    reconnecting = true;
+    try {
+      await daemonRestart();
+      announceAction('Restarting daemon...');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : error ? String(error) : 'Unable to restart daemon';
+      announceAction(message);
+    } finally {
+      reconnecting = false;
+    }
+  };
+
+  const resolveAttachTarget = (session: Session) => {
+    const paneTarget = session.panes?.find((pane) => pane.tmuxPaneId)?.tmuxPaneId ?? null;
+    return paneTarget ?? session.tmuxSessionId ?? session.name;
+  };
+
+  const copyAttachCommand = async (session: Session) => {
+    const target = resolveAttachTarget(session);
+    if (!target) {
+      announceAction('Attach command unavailable for this session.');
+      return;
+    }
+    try {
+      const command = await getAttachCommand(target);
+      await navigator.clipboard.writeText(command);
+      announceAction('Attach command copied to clipboard.');
+    } catch {
+      try {
+        await navigator.clipboard.writeText(`tmux attach -t ${target}`);
+        announceAction('Attach command copied to clipboard.');
+      } catch {
+        announceAction('Unable to copy attach command.');
+      }
+    }
+  };
+
+  const killSession = async (session: Session) => {
+    const confirmed = window.confirm(`Kill session "${session.name}"?`);
+    if (!confirmed) return;
+    try {
+      await rpcCallWithRetry('actions.sessionKill', { sessionId: session.sessionId }, { idempotent: false });
+      announceAction(`Killed session ${session.name}.`);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : error ? String(error) : 'Kill failed';
+      announceAction(`Unable to kill session: ${message}`);
+    }
+  };
+
+  const handleSessionAction = async (session: Session, action: string) => {
+    switch (action) {
+      case 'attach':
+        await copyAttachCommand(session);
+        break;
+      case 'pin':
+        {
+          const wasPinned = $pinnedSessionIds.has(session.sessionId);
+          togglePinSession(session.sessionId);
+          announceAction(wasPinned ? 'Session unpinned.' : 'Session pinned.');
+        }
+        break;
+      case 'mute':
+        {
+          const wasMuted = $mutedSessionIds.has(session.sessionId);
+          toggleMuteSession(session.sessionId);
+          announceAction(wasMuted ? 'Alerts unmuted.' : 'Alerts muted.');
+        }
+        break;
+      case 'kill':
+        await killSession(session);
+        break;
+      default:
+        break;
+    }
   };
 
   /**
@@ -125,7 +226,10 @@
 
   <svelte:fragment slot="sidebar">
     <Sidebar title="Sessions" subtitle="Filter and browse active sessions" count={$sessions.length}>
-      <SessionsHub searchQuery={query} />
+      <SessionsHub
+        searchQuery={query}
+        on:action={(event) => handleSessionAction(event.detail.session, event.detail.action)}
+      />
     </Sidebar>
   </svelte:fragment>
 
@@ -152,7 +256,50 @@
 
   <svelte:fragment slot="focus">
     <div class="space-y-6">
+      {#if $connectionState !== 'connected'}
+        <div
+          class="card border-status-warning-ring bg-status-warning-muted text-status-warning-text"
+          role="status"
+          aria-live="polite"
+        >
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div class="space-y-1">
+              <p class="label">Connection</p>
+              <p class="text-sm font-medium">{connectionStatus.label}</p>
+              <p class="text-xs text-status-warning-text/80">{connectionStatus.description}</p>
+              {#if $lastConnectionError}
+                <p class="text-xs text-status-warning-text/70">
+                  {$lastConnectionError}
+                </p>
+              {/if}
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                class="btn btn-sm btn-secondary"
+                type="button"
+                on:click={triggerReconnect}
+                disabled={reconnecting}
+                aria-busy={reconnecting}
+              >
+                {reconnecting ? 'Restarting…' : 'Restart daemon'}
+              </button>
+              <button
+                class="btn btn-sm btn-ghost"
+                type="button"
+                on:click={() => (healthCenterOpen = true)}
+              >
+                Open Health Center
+              </button>
+            </div>
+          </div>
+        </div>
+      {/if}
       <OverviewCards />
+      {#if actionNotice}
+        <div class="card border-status-info-ring bg-status-info-muted text-status-info-text text-sm" role="status" aria-live="polite">
+          {actionNotice}
+        </div>
+      {/if}
 
       {#if $selectedSession}
         {@const sessionStatus = getSessionStatus($selectedSession.status)}
@@ -169,14 +316,48 @@
                 <span class="text-xs text-text-muted font-mono">{$selectedSession.sessionId.slice(0, 12)}</span>
               </div>
             </div>
-            <button
-              class="btn btn-secondary btn-sm"
-              type="button"
-              on:click={() => selectSession(null)}
-              aria-label="Clear session focus"
-            >
-              Clear focus
-            </button>
+            <div class="flex flex-wrap items-center gap-2">
+              <button
+                class="btn btn-secondary btn-sm"
+                type="button"
+                on:click={() => handleSessionAction($selectedSession, 'attach')}
+                aria-label="Copy attach command"
+              >
+                Attach
+              </button>
+              <button
+                class="btn btn-secondary btn-sm"
+                type="button"
+                on:click={() => handleSessionAction($selectedSession, 'pin')}
+                aria-label={$pinnedSessionIds.has($selectedSession.sessionId) ? 'Unpin session' : 'Pin session'}
+              >
+                {$pinnedSessionIds.has($selectedSession.sessionId) ? 'Unpin' : 'Pin'}
+              </button>
+              <button
+                class="btn btn-secondary btn-sm"
+                type="button"
+                on:click={() => handleSessionAction($selectedSession, 'mute')}
+                aria-label={$mutedSessionIds.has($selectedSession.sessionId) ? 'Unmute alerts' : 'Mute alerts'}
+              >
+                {$mutedSessionIds.has($selectedSession.sessionId) ? 'Unmute' : 'Mute'}
+              </button>
+              <button
+                class="btn btn-secondary btn-sm text-status-error-text"
+                type="button"
+                on:click={() => handleSessionAction($selectedSession, 'kill')}
+                aria-label="Kill session"
+              >
+                Kill
+              </button>
+              <button
+                class="btn btn-secondary btn-sm"
+                type="button"
+                on:click={() => selectSession(null)}
+                aria-label="Clear session focus"
+              >
+                Clear focus
+              </button>
+            </div>
           </div>
 
           <div class="grid gap-2 sm:grid-cols-3" role="group" aria-label="Session metrics">
@@ -285,20 +466,55 @@
           {#each sortedSessions.slice(0, 8) as session (session.sessionId)}
             {@const sessionStatus = getSessionStatus(session.status)}
             <li role="listitem">
-              <button
-                type="button"
-                class="tray-item-compact w-full cursor-pointer hover:border-border-strong focus-ring"
-                on:click={() => openDashboardWithSession(session.sessionId)}
-                aria-label="Open {session.name} in dashboard"
-              >
-                <div class="min-w-0 flex-1 text-left">
+              <div class="tray-item-compact flex items-center gap-2">
+                <button
+                  type="button"
+                  class="min-w-0 flex-1 text-left"
+                  on:click={() => openDashboardWithSession(session.sessionId)}
+                  aria-label="Open {session.name} in dashboard"
+                >
                   <p class="truncate text-sm font-medium text-text-primary">{session.name}</p>
+                  <span class="mt-0.5 inline-flex items-center gap-1 text-[10px] text-text-muted" aria-label="Status: {sessionStatus.label}">
+                    <span class="status-dot {sessionStatus.dot}" aria-hidden="true"></span>
+                    {sessionStatus.label}
+                  </span>
+                </button>
+                <div class="flex items-center gap-1">
+                  <button
+                    type="button"
+                    class="rounded bg-surface-base/60 px-1.5 py-1 text-[10px] text-text-muted hover:text-text-primary focus-ring"
+                    title="Copy attach command"
+                    aria-label="Copy attach command"
+                    on:click|stopPropagation={() => handleSessionAction(session, 'attach')}
+                  >
+                    ⧉
+                  </button>
+                  <button
+                    type="button"
+                    class={`rounded bg-surface-base/60 px-1.5 py-1 text-[10px] focus-ring ${
+                      $pinnedSessionIds.has(session.sessionId) ? 'text-accent' : 'text-text-muted hover:text-text-primary'
+                    }`}
+                    title={$pinnedSessionIds.has(session.sessionId) ? 'Unpin session' : 'Pin session'}
+                    aria-label={$pinnedSessionIds.has(session.sessionId) ? 'Unpin session' : 'Pin session'}
+                    on:click|stopPropagation={() => handleSessionAction(session, 'pin')}
+                  >
+                    📌
+                  </button>
+                  <button
+                    type="button"
+                    class={`rounded bg-surface-base/60 px-1.5 py-1 text-[10px] focus-ring ${
+                      $mutedSessionIds.has(session.sessionId)
+                        ? 'text-status-warning-text'
+                        : 'text-text-muted hover:text-text-primary'
+                    }`}
+                    title={$mutedSessionIds.has(session.sessionId) ? 'Unmute alerts' : 'Mute alerts'}
+                    aria-label={$mutedSessionIds.has(session.sessionId) ? 'Unmute alerts' : 'Mute alerts'}
+                    on:click|stopPropagation={() => handleSessionAction(session, 'mute')}
+                  >
+                    {$mutedSessionIds.has(session.sessionId) ? '🔕' : '🔔'}
+                  </button>
                 </div>
-                <span class="ml-2 shrink-0 flex items-center gap-1" aria-label="Status: {sessionStatus.label}">
-                  <span class="status-dot {sessionStatus.dot}" aria-hidden="true"></span>
-                  <span class="text-[10px] text-text-muted">{sessionStatus.label}</span>
-                </span>
-              </button>
+              </div>
             </li>
           {/each}
           {#if sortedSessions.length === 0}

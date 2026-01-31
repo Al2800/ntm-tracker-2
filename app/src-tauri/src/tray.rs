@@ -21,6 +21,7 @@ const MENU_QUIT: &str = "tray_quit";
 const MENU_SESSION_PREFIX: &str = "tray_session:";
 
 const UPDATE_INTERVAL: Duration = Duration::from_secs(2);
+const HIDDEN_UPDATE_INTERVAL: Duration = Duration::from_secs(10);
 
 #[derive(Clone, Debug)]
 pub struct TraySummary {
@@ -275,7 +276,6 @@ fn toggle_popover(app: &AppHandle, position: Option<PhysicalPosition<f64>>) {
     }
 
     let _ = popover.show();
-    let _ = popover.set_focus();
 }
 
 /// Set up close-on-blur for the popover window.
@@ -359,7 +359,16 @@ pub fn spawn_updater(app: AppHandle) {
                 }
             }
 
-            tokio::time::sleep(UPDATE_INTERVAL).await;
+            let popover_visible = app
+                .get_webview_window("popover")
+                .and_then(|window| window.is_visible().ok())
+                .unwrap_or(false);
+            let interval = if popover_visible {
+                UPDATE_INTERVAL
+            } else {
+                HIDDEN_UPDATE_INTERVAL
+            };
+            tokio::time::sleep(interval).await;
         }
     });
 }

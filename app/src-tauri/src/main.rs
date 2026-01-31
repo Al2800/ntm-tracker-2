@@ -23,9 +23,13 @@ fn main() {
             let settings = load_settings(app.handle());
             let _ = autostart::set_enabled(settings.autostart_enabled);
             app.manage(AppState::new(settings));
-            if std::env::args().any(|arg| arg == "--minimized") {
-                if let Some(window) = app.get_webview_window("main") {
+            let start_minimized = std::env::args().any(|arg| arg == "--minimized");
+            if let Some(window) = app.get_webview_window("main") {
+                if start_minimized {
                     let _ = window.hide();
+                } else {
+                    let _ = window.show();
+                    let _ = window.set_focus();
                 }
             }
             tray::init(app.handle())?;

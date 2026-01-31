@@ -16,7 +16,8 @@
         "label": "main",
         "width": 1100,
         "height": 720,
-        "resizable": true
+        "resizable": true,
+        "visible": false
       },
       {
         "title": "NTM Tracker",
@@ -29,7 +30,7 @@
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "visible": false,
-        "focus": true,
+        "focus": false,
         "shadow": true
       }
     ],

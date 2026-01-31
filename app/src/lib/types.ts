@@ -8,6 +8,9 @@ export interface Pane {
   agentType?: string;
   lastActivityAt?: number;
   currentCommand?: string;
+  tmuxPaneId?: string | null;
+  tmuxWindowId?: string | null;
+  tmuxPanePid?: number | null;
 }
 
 export interface Session {
@@ -17,6 +20,8 @@ export interface Session {
   paneCount: number;
   panes?: Pane[];
   lastSeenAt?: number;
+  tmuxSessionId?: string | null;
+  sourceId?: string;
 }
 
 export interface TrackerEvent {
