@@ -4,6 +4,7 @@ use crate::metrics::{Timer, METRICS};
 use crate::ntm::{NtmClient, NtmError};
 use crate::reconcile::reconcile_ntm_markdown;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug)]
@@ -34,7 +35,7 @@ pub struct NtmPollResult {
 pub struct NtmCollector {
     client: NtmClient,
     bus: EventBus,
-    cache: Cache,
+    cache: Arc<Cache>,
     config: NtmCollectorConfig,
     session_uid_by_name: HashMap<String, String>,
     pane_uid_by_key: HashMap<String, String>,
@@ -45,7 +46,7 @@ impl NtmCollector {
     pub fn new(
         client: NtmClient,
         bus: EventBus,
-        cache: Cache,
+        cache: Arc<Cache>,
         config: NtmCollectorConfig,
     ) -> Self {
         Self {

@@ -9,6 +9,8 @@ pub fn hello(ctx: &RpcContext) -> RpcResult<Value> {
 pub fn health_get(ctx: &RpcContext) -> RpcResult<Value> {
     let health = ctx.cache.health();
     let last_event_id = events::last_event_id(ctx.cache.as_ref());
+    let polling_state = ctx.cache.polling_state();
+    let polling_config = ctx.config.current().polling;
 
     Ok(json!({
         "status": health.status,
@@ -21,6 +23,12 @@ pub fn health_get(ctx: &RpcContext) -> RpcResult<Value> {
         "capabilities": ctx.capabilities,
         "lastEventId": last_event_id,
         "lastError": health.last_error,
+        "polling": {
+            "snapshot": polling_state.snapshot,
+            "tmux": polling_state.tmux,
+            "ntm": polling_state.ntm,
+            "config": polling_config,
+        }
     }))
 }
 

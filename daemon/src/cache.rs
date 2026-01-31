@@ -1,5 +1,6 @@
 use crate::models::pane::Pane;
 use crate::models::session::Session;
+use serde::Serialize;
 use dashmap::DashMap;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -29,6 +30,21 @@ pub struct HealthStatus {
     pub last_error: Option<String>,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct PollingDatum {
+    pub interval_ms: u64,
+    pub mode: String,
+    pub reason: String,
+    pub last_change_at: i64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
+pub struct PollingState {
+    pub snapshot: PollingDatum,
+    pub tmux: PollingDatum,
+    pub ntm: PollingDatum,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct CacheSnapshot {
     pub sessions: Vec<Session>,
@@ -52,6 +68,7 @@ pub struct Cache {
     recent_events: RwLock<VecDeque<EventRecord>>,
     stats_today: RwLock<StatsAggregate>,
     health: RwLock<HealthStatus>,
+    polling_state: RwLock<PollingState>,
     max_events: usize,
     session_hits: AtomicU64,
     session_misses: AtomicU64,
@@ -67,6 +84,7 @@ impl Cache {
             recent_events: RwLock::new(VecDeque::with_capacity(max_events)),
             stats_today: RwLock::new(StatsAggregate::default()),
             health: RwLock::new(HealthStatus::default()),
+            polling_state: RwLock::new(PollingState::default()),
             max_events: max_events.max(1),
             session_hits: AtomicU64::new(0),
             session_misses: AtomicU64::new(0),
@@ -162,6 +180,49 @@ impl Cache {
             .read()
             .expect("cache health lock")
             .clone()
+    }
+
+    pub fn polling_state(&self) -> PollingState {
+        self.polling_state
+            .read()
+            .expect("cache polling_state lock")
+            .clone()
+    }
+
+    pub fn update_polling_snapshot(&self, next: PollingDatum) -> bool {
+        let mut guard = self
+            .polling_state
+            .write()
+            .expect("cache polling_state lock");
+        if guard.snapshot == next {
+            return false;
+        }
+        guard.snapshot = next;
+        true
+    }
+
+    pub fn update_polling_tmux(&self, next: PollingDatum) -> bool {
+        let mut guard = self
+            .polling_state
+            .write()
+            .expect("cache polling_state lock");
+        if guard.tmux == next {
+            return false;
+        }
+        guard.tmux = next;
+        true
+    }
+
+    pub fn update_polling_ntm(&self, next: PollingDatum) -> bool {
+        let mut guard = self
+            .polling_state
+            .write()
+            .expect("cache polling_state lock");
+        if guard.ntm == next {
+            return false;
+        }
+        guard.ntm = next;
+        true
     }
 
     pub fn metrics(&self) -> CacheMetrics {

@@ -1,9 +1,14 @@
 use clap::{Parser, Subcommand};
-use ntm_tracker_daemon::cache::Cache;
+use ntm_tracker_daemon::bus::EventBus;
+use ntm_tracker_daemon::cache::{Cache, PollingDatum};
 use ntm_tracker_daemon::cli::{self, OutputFormat, DEFAULT_PORT};
-use ntm_tracker_daemon::config::ConfigManager;
+use ntm_tracker_daemon::collector::ntm::{NtmCollector, NtmCollectorConfig};
+use ntm_tracker_daemon::collector::tmux::{TmuxCollector, TmuxCollectorConfig};
+use ntm_tracker_daemon::command::{CommandConfig, CommandRunner};
+use ntm_tracker_daemon::config::{ConfigManager, PollingConfig};
 use ntm_tracker_daemon::logging;
 use ntm_tracker_daemon::maintenance;
+use ntm_tracker_daemon::ntm::{NtmClient, NtmConfig};
 use ntm_tracker_daemon::rpc::handlers;
 use ntm_tracker_daemon::rpc::RpcContext;
 use ntm_tracker_daemon::service::{InstanceGuard, ShutdownHandler};
@@ -241,6 +246,20 @@ async fn run_daemon(
         maintenance_runner.run_loop(maintenance_shutdown).await;
     });
 
+    if ctx.capabilities.ntm {
+        let ntm_shutdown = shutdown_handler.subscribe();
+        spawn_ntm_collector(ctx.clone(), ntm_shutdown);
+    } else {
+        tracing::info!("NTM not detected; skipping NTM collector");
+    }
+
+    if ctx.capabilities.tmux {
+        let tmux_shutdown = shutdown_handler.subscribe();
+        spawn_tmux_collector(ctx.clone(), tmux_shutdown);
+    } else {
+        tracing::info!("tmux not detected; skipping tmux collector");
+    }
+
     // Determine which transports to start
     let use_stdio = stdio || (ws_port.is_none() && http_port.is_none());
 
@@ -294,25 +313,252 @@ async fn run_daemon(
     tracing::info!("Daemon shutdown complete");
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PollingMode {
+    Active,
+    Idle,
+    Background,
+    Degraded,
+}
+
+impl PollingMode {
+    fn as_str(&self) -> &'static str {
+        match self {
+            PollingMode::Active => "active",
+            PollingMode::Idle => "idle",
+            PollingMode::Background => "background",
+            PollingMode::Degraded => "degraded",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct PollingDecision {
+    mode: PollingMode,
+    reason: &'static str,
+    interval_ms: u64,
+}
+
+fn compute_polling_decision(
+    cache: &Cache,
+    polling: &PollingConfig,
+    error_streak: u32,
+) -> PollingDecision {
+    let now = current_unix_ts();
+    let sessions = cache.all_sessions();
+    let has_sessions = !sessions.is_empty();
+    let is_active = sessions.iter().any(|session| {
+        session.ended_at.is_none()
+            && now.saturating_sub(session.last_seen_at) <= polling.idle_threshold_secs
+    });
+
+    let mut mode = if !has_sessions {
+        PollingMode::Background
+    } else if is_active {
+        PollingMode::Active
+    } else {
+        PollingMode::Idle
+    };
+
+    let mut reason = match mode {
+        PollingMode::Active => "recent_activity",
+        PollingMode::Idle => "idle_timeout",
+        PollingMode::Background => "no_sessions",
+        PollingMode::Degraded => "degraded",
+    };
+
+    let mut interval_ms = match mode {
+        PollingMode::Active => polling.snapshot_interval_ms,
+        PollingMode::Idle => polling.snapshot_idle_interval_ms,
+        PollingMode::Background => polling.snapshot_background_interval_ms,
+        PollingMode::Degraded => polling.snapshot_degraded_interval_ms,
+    };
+
+    let health = cache.health();
+    if error_streak > 0 {
+        mode = PollingMode::Degraded;
+        reason = "poll_errors";
+        interval_ms = polling.snapshot_degraded_interval_ms;
+    } else if !health.status.trim().is_empty() && health.status != "ok" {
+        mode = PollingMode::Degraded;
+        reason = "health_degraded";
+        interval_ms = polling.snapshot_degraded_interval_ms;
+    }
+
+    interval_ms = interval_ms.max(250);
+
+    PollingDecision {
+        mode,
+        reason,
+        interval_ms,
+    }
+}
+
+fn spawn_ntm_collector(
+    ctx: Arc<RpcContext>,
+    mut shutdown_rx: tokio::sync::broadcast::Receiver<()>,
+) {
+    tokio::spawn(async move {
+        let polling = ctx.config.current().polling;
+        let collector_config = NtmCollectorConfig {
+            active_interval: std::time::Duration::from_millis(polling.snapshot_interval_ms),
+            idle_interval: std::time::Duration::from_millis(polling.snapshot_idle_interval_ms),
+            idle_threshold_secs: polling.idle_threshold_secs,
+        };
+        let runner = CommandRunner::new(CommandConfig::default());
+        let client = NtmClient::new(runner, NtmConfig::default());
+        let bus = EventBus::new(8);
+        let mut collector = NtmCollector::new(client, bus, ctx.cache.clone(), collector_config);
+
+        let mut error_streak = 0u32;
+        loop {
+            let polling = ctx.config.current().polling;
+            let decision = compute_polling_decision(ctx.cache.as_ref(), &polling, error_streak);
+            let now = current_unix_ts();
+            let updated = ctx.cache.update_polling_ntm(PollingDatum {
+                interval_ms: decision.interval_ms,
+                mode: decision.mode.as_str().to_string(),
+                reason: decision.reason.to_string(),
+                last_change_at: now,
+            });
+            if updated {
+                tracing::info!(
+                    kind = "ntm",
+                    interval_ms = decision.interval_ms,
+                    mode = %decision.mode.as_str(),
+                    reason = decision.reason,
+                    "polling interval updated"
+                );
+            }
+
+            let sleep = tokio::time::sleep(std::time::Duration::from_millis(decision.interval_ms));
+            tokio::pin!(sleep);
+            tokio::select! {
+                _ = &mut sleep => {
+                    match collector.poll_once().await {
+                        Ok(result) => {
+                            if result.degraded {
+                                error_streak = error_streak.saturating_add(1);
+                            } else {
+                                error_streak = 0;
+                            }
+                        }
+                        Err(err) => {
+                            error_streak = error_streak.saturating_add(1);
+                            tracing::warn!(error = %err, "ntm poll failed");
+                        }
+                    }
+                }
+                _ = shutdown_rx.recv() => {
+                    break;
+                }
+            }
+        }
+    });
+}
+
+fn spawn_tmux_collector(
+    ctx: Arc<RpcContext>,
+    mut shutdown_rx: tokio::sync::broadcast::Receiver<()>,
+) {
+    tokio::spawn(async move {
+        let polling = ctx.config.current().polling;
+        let collector_config = TmuxCollectorConfig {
+            poll_interval: std::time::Duration::from_millis(polling.snapshot_interval_ms),
+            ..TmuxCollectorConfig::default()
+        };
+        let runner = CommandRunner::new(CommandConfig::default());
+        let bus = EventBus::new(8);
+        let mut collector = TmuxCollector::new(runner, bus, ctx.cache.clone(), collector_config);
+
+        let mut error_streak = 0u32;
+        loop {
+            let polling = ctx.config.current().polling;
+            let decision = compute_polling_decision(ctx.cache.as_ref(), &polling, error_streak);
+            let now = current_unix_ts();
+            let updated = ctx.cache.update_polling_tmux(PollingDatum {
+                interval_ms: decision.interval_ms,
+                mode: decision.mode.as_str().to_string(),
+                reason: decision.reason.to_string(),
+                last_change_at: now,
+            });
+            if updated {
+                tracing::info!(
+                    kind = "tmux",
+                    interval_ms = decision.interval_ms,
+                    mode = %decision.mode.as_str(),
+                    reason = decision.reason,
+                    "polling interval updated"
+                );
+            }
+
+            let sleep = tokio::time::sleep(std::time::Duration::from_millis(decision.interval_ms));
+            tokio::pin!(sleep);
+            tokio::select! {
+                _ = &mut sleep => {
+                    match collector.poll_once().await {
+                        Ok(result) => {
+                            if result.degraded {
+                                error_streak = error_streak.saturating_add(1);
+                            } else {
+                                error_streak = 0;
+                            }
+                        }
+                        Err(err) => {
+                            error_streak = error_streak.saturating_add(1);
+                            tracing::warn!(error = %err, "tmux poll failed");
+                        }
+                    }
+                }
+                _ = shutdown_rx.recv() => {
+                    break;
+                }
+            }
+        }
+    });
+}
+
 fn spawn_stdio_snapshot_notifier(
     ctx: Arc<RpcContext>,
     notification_tx: mpsc::Sender<transport::JsonRpcNotification>,
     mut shutdown_rx: tokio::sync::broadcast::Receiver<()>,
 ) {
-    let interval_ms = ctx.config.current().polling.snapshot_interval_ms.max(500);
     tokio::spawn(async move {
-        let mut ticker = tokio::time::interval(std::time::Duration::from_millis(interval_ms));
+        let mut error_streak = 0u32;
         loop {
+            let polling = ctx.config.current().polling;
+            let decision = compute_polling_decision(ctx.cache.as_ref(), &polling, error_streak);
+            let now = current_unix_ts();
+            let updated = ctx.cache.update_polling_snapshot(PollingDatum {
+                interval_ms: decision.interval_ms,
+                mode: decision.mode.as_str().to_string(),
+                reason: decision.reason.to_string(),
+                last_change_at: now,
+            });
+            if updated {
+                tracing::info!(
+                    kind = "snapshot",
+                    interval_ms = decision.interval_ms,
+                    mode = %decision.mode.as_str(),
+                    reason = decision.reason,
+                    "polling interval updated"
+                );
+            }
+
+            let sleep = tokio::time::sleep(std::time::Duration::from_millis(decision.interval_ms));
+            tokio::pin!(sleep);
             tokio::select! {
-                _ = ticker.tick() => {
+                _ = &mut sleep => {
                     match handlers::core::snapshot_get(ctx.as_ref()) {
                         Ok(snapshot) => {
+                            error_streak = 0;
                             let notification = transport::JsonRpcNotification::new("sessions.snapshot", snapshot);
                             if notification_tx.send(notification).await.is_err() {
                                 break;
                             }
                         }
                         Err(err) => {
+                            error_streak = error_streak.saturating_add(1);
                             tracing::warn!(error = %err.message, "snapshot notification failed");
                         }
                     }
@@ -323,6 +569,13 @@ fn spawn_stdio_snapshot_notifier(
             }
         }
     });
+}
+
+fn current_unix_ts() -> i64 {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_else(|_| std::time::Duration::from_secs(0));
+    now.as_secs() as i64
 }
 
 fn config_path_str(config: &ConfigManager) -> String {

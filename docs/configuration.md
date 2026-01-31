@@ -20,6 +20,10 @@ bind = "127.0.0.1:3847"
 
 [polling]
 snapshot-interval-ms = 2000
+snapshot-idle-interval-ms = 5000
+snapshot-background-interval-ms = 15000
+snapshot-degraded-interval-ms = 10000
+idle-threshold-secs = 300
 
 [capture]
 capture-output = false
@@ -50,6 +54,18 @@ format = "text"
 - `snapshot-interval-ms` (u64, default `2000`)
   - Full snapshot poll interval in milliseconds.
   - Valid range: **250–60000**.
+- `snapshot-idle-interval-ms` (u64, default `5000`)
+  - Polling interval when sessions are idle.
+  - Valid range: **snapshot-interval-ms–120000**.
+- `snapshot-background-interval-ms` (u64, default `15000`)
+  - Polling interval when no sessions are detected.
+  - Valid range: **snapshot-idle-interval-ms–300000**.
+- `snapshot-degraded-interval-ms` (u64, default `10000`)
+  - Polling interval when daemon health is degraded or errors occur.
+  - Valid range: **snapshot-interval-ms–300000**.
+- `idle-threshold-secs` (i64, default `300`)
+  - Threshold (seconds) to classify sessions as active vs idle.
+  - Valid range: **30–7200**.
 
 ### `capture`
 - `capture-output` (bool, default `false`)
@@ -87,6 +103,10 @@ Environment variables override config file values:
 | --- | --- |
 | `NTM_TRACKER_SERVER_BIND` | `server.bind` |
 | `NTM_TRACKER_POLLING_SNAPSHOT_INTERVAL_MS` | `polling.snapshot-interval-ms` |
+| `NTM_TRACKER_POLLING_SNAPSHOT_IDLE_INTERVAL_MS` | `polling.snapshot-idle-interval-ms` |
+| `NTM_TRACKER_POLLING_SNAPSHOT_BACKGROUND_INTERVAL_MS` | `polling.snapshot-background-interval-ms` |
+| `NTM_TRACKER_POLLING_SNAPSHOT_DEGRADED_INTERVAL_MS` | `polling.snapshot-degraded-interval-ms` |
+| `NTM_TRACKER_POLLING_IDLE_THRESHOLD_SECS` | `polling.idle-threshold-secs` |
 | `NTM_TRACKER_CAPTURE_OUTPUT` | `capture.capture-output` (`1/true/yes/on` = true) |
 | `NTM_TRACKER_PRIVACY_REDACTION_PATTERNS` | `privacy.redaction-patterns` (comma‑separated) |
 | `NTM_TRACKER_SECURITY_ADMIN_TOKEN_PATH` | `security.admin-token-path` |

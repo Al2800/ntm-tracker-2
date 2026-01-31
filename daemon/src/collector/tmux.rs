@@ -6,6 +6,7 @@ use crate::models::pane::{Pane, PaneStatus};
 use crate::models::session::{Session, SessionStatus};
 use crate::parsers::tmux_panes::{parse_tmux_panes, TmuxPaneMeta};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug)]
@@ -35,7 +36,7 @@ pub struct TmuxPollResult {
 pub struct TmuxCollector {
     runner: CommandRunner,
     bus: EventBus,
-    cache: Cache,
+    cache: Arc<Cache>,
     config: TmuxCollectorConfig,
     last_state: HashMap<String, TmuxPaneMeta>,
     pane_uid_by_tmux: HashMap<String, String>,
@@ -47,7 +48,7 @@ impl TmuxCollector {
     pub fn new(
         runner: CommandRunner,
         bus: EventBus,
-        cache: Cache,
+        cache: Arc<Cache>,
         config: TmuxCollectorConfig,
     ) -> Self {
         Self {
@@ -218,7 +219,7 @@ mod tests {
     fn diff_detects_changes_and_removals() {
         let runner = CommandRunner::new(crate::command::CommandConfig::default());
         let bus = EventBus::new(4);
-        let cache = Cache::new(100);
+        let cache = std::sync::Arc::new(Cache::new(100));
         let mut collector = TmuxCollector::new(runner, bus, cache, TmuxCollectorConfig::default());
 
         let meta = TmuxPaneMeta {

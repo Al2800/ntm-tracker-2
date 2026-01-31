@@ -1,5 +1,6 @@
 //! Debug and diagnostics endpoints (admin only).
 
+use crate::cache::PollingState;
 use crate::metrics::METRICS;
 use crate::rpc::{require_admin, RpcContext, RpcResult};
 use serde::Serialize;
@@ -20,6 +21,7 @@ pub fn diagnostics(ctx: &RpcContext) -> RpcResult<Value> {
         schema_version: u32,
         capabilities: crate::rpc::Capabilities,
         cache_stats: CacheStats,
+        polling: PollingState,
     }
 
     #[derive(Serialize)]
@@ -44,6 +46,7 @@ pub fn diagnostics(ctx: &RpcContext) -> RpcResult<Value> {
             pane_count: cache.pane_count(),
             event_count: cache.event_count(),
         },
+        polling: cache.polling_state(),
     };
 
     serde_json::to_value(diagnostics).map_err(|e| {

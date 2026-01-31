@@ -44,14 +44,26 @@ impl Default for ServerConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct PollingConfig {
-    /// How often we poll tmux/ntm for a full snapshot.
+    /// How often we poll tmux/ntm for a full snapshot when activity is high.
     pub snapshot_interval_ms: u64,
+    /// Polling interval when sessions are idle.
+    pub snapshot_idle_interval_ms: u64,
+    /// Polling interval when no sessions are detected.
+    pub snapshot_background_interval_ms: u64,
+    /// Polling interval when the daemon is degraded or unhealthy.
+    pub snapshot_degraded_interval_ms: u64,
+    /// Idle threshold (seconds) to classify sessions as active vs idle.
+    pub idle_threshold_secs: i64,
 }
 
 impl Default for PollingConfig {
     fn default() -> Self {
         Self {
             snapshot_interval_ms: 2_000,
+            snapshot_idle_interval_ms: 5_000,
+            snapshot_background_interval_ms: 15_000,
+            snapshot_degraded_interval_ms: 10_000,
+            idle_threshold_secs: 300,
         }
     }
 }
@@ -167,6 +179,26 @@ impl DaemonConfig {
                 self.polling.snapshot_interval_ms = parsed;
             }
         }
+        if let Ok(interval) = env::var("NTM_TRACKER_POLLING_SNAPSHOT_IDLE_INTERVAL_MS") {
+            if let Ok(parsed) = interval.parse::<u64>() {
+                self.polling.snapshot_idle_interval_ms = parsed;
+            }
+        }
+        if let Ok(interval) = env::var("NTM_TRACKER_POLLING_SNAPSHOT_BACKGROUND_INTERVAL_MS") {
+            if let Ok(parsed) = interval.parse::<u64>() {
+                self.polling.snapshot_background_interval_ms = parsed;
+            }
+        }
+        if let Ok(interval) = env::var("NTM_TRACKER_POLLING_SNAPSHOT_DEGRADED_INTERVAL_MS") {
+            if let Ok(parsed) = interval.parse::<u64>() {
+                self.polling.snapshot_degraded_interval_ms = parsed;
+            }
+        }
+        if let Ok(threshold) = env::var("NTM_TRACKER_POLLING_IDLE_THRESHOLD_SECS") {
+            if let Ok(parsed) = threshold.parse::<i64>() {
+                self.polling.idle_threshold_secs = parsed;
+            }
+        }
         if let Ok(capture) = env::var("NTM_TRACKER_CAPTURE_OUTPUT") {
             let value = capture.trim().to_lowercase();
             self.capture.capture_output = matches!(value.as_str(), "1" | "true" | "yes" | "on");
@@ -268,6 +300,46 @@ impl DaemonConfig {
         if self.polling.snapshot_interval_ms > 60_000 {
             return Err(ConfigError::new(
                 "polling.snapshot-interval-ms must be <= 60000",
+            ));
+        }
+        if self.polling.snapshot_idle_interval_ms < self.polling.snapshot_interval_ms {
+            return Err(ConfigError::new(
+                "polling.snapshot-idle-interval-ms must be >= snapshot-interval-ms",
+            ));
+        }
+        if self.polling.snapshot_idle_interval_ms > 120_000 {
+            return Err(ConfigError::new(
+                "polling.snapshot-idle-interval-ms must be <= 120000",
+            ));
+        }
+        if self.polling.snapshot_background_interval_ms < self.polling.snapshot_idle_interval_ms {
+            return Err(ConfigError::new(
+                "polling.snapshot-background-interval-ms must be >= snapshot-idle-interval-ms",
+            ));
+        }
+        if self.polling.snapshot_background_interval_ms > 300_000 {
+            return Err(ConfigError::new(
+                "polling.snapshot-background-interval-ms must be <= 300000",
+            ));
+        }
+        if self.polling.snapshot_degraded_interval_ms < self.polling.snapshot_interval_ms {
+            return Err(ConfigError::new(
+                "polling.snapshot-degraded-interval-ms must be >= snapshot-interval-ms",
+            ));
+        }
+        if self.polling.snapshot_degraded_interval_ms > 300_000 {
+            return Err(ConfigError::new(
+                "polling.snapshot-degraded-interval-ms must be <= 300000",
+            ));
+        }
+        if self.polling.idle_threshold_secs < 30 {
+            return Err(ConfigError::new(
+                "polling.idle-threshold-secs must be >= 30",
+            ));
+        }
+        if self.polling.idle_threshold_secs > 7_200 {
+            return Err(ConfigError::new(
+                "polling.idle-threshold-secs must be <= 7200",
             ));
         }
 

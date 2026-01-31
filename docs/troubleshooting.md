@@ -52,6 +52,10 @@ Use this guide to diagnose connection issues, missing data, or instability.
 ### Fixes
 - Check polling interval in `daemon.toml`:
   - `polling.snapshot-interval-ms` default is 2000ms.
+  - `polling.snapshot-idle-interval-ms` default is 5000ms.
+  - `polling.snapshot-background-interval-ms` default is 15000ms.
+  - `polling.snapshot-degraded-interval-ms` default is 10000ms.
+  - `polling.idle-threshold-secs` default is 300.
 - Ensure the WSL environment isn’t under heavy CPU load.
 - Reduce expensive NTM sections (use `--md-sections sessions` if running custom scripts).
 
@@ -75,6 +79,10 @@ Then reproduce the issue and attach the log file to your report.
 
 ### Fixes
 - Ensure `polling.snapshot-interval-ms` is between 250 and 60000.
+- Ensure `polling.snapshot-idle-interval-ms` is between snapshot-interval-ms and 120000.
+- Ensure `polling.snapshot-background-interval-ms` is between snapshot-idle-interval-ms and 300000.
+- Ensure `polling.snapshot-degraded-interval-ms` is between snapshot-interval-ms and 300000.
+- Ensure `polling.idle-threshold-secs` is between 30 and 7200.
 - Validate regexes in `privacy.redaction-patterns`.
 - If `security.admin-token-path` is set on Unix, ensure permissions are `0600`.
 
