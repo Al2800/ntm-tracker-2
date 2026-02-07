@@ -21,5 +21,12 @@ daemon/target/
 .beads/daemon-error
 .beads/*.pid
 
+# workspace build artifacts
+target/
+Cargo.lock
+
+# test logs
+logs/
+
 # local build outputs
 a.out

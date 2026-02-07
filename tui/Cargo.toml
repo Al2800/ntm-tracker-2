@@ -1,0 +1,27 @@
+[package]
+name = "ntm-tracker-tui"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "ntm_tracker_tui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ntm-tui"
+path = "src/main.rs"
+
+[dependencies]
+ftui = { git = "https://github.com/Dicklesworthstone/frankentui.git" }
+
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+chrono = "0.4"
+tracing = "0.1"
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+pretty_assertions = "1"
