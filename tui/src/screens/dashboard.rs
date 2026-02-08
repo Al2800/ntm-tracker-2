@@ -1,5 +1,5 @@
 use crate::app::NtmApp;
-use crate::msg::FocusArea;
+use crate::msg::{EventFilter, FocusArea};
 use crate::widgets::{
     activity_spark, escalation_inbox, event_timeline, overview_cards, pane_table, session_list,
 };
@@ -7,13 +7,14 @@ use ftui::core::geometry::Rect;
 use ftui::layout::{Constraint, Flex};
 use ftui::render::frame::Frame;
 
-/// Render the main dashboard screen.
+/// Render the main dashboard screen with 3-zone layout.
 pub fn render(frame: &mut Frame, area: Rect, app: &NtmApp) {
-    // Vertical layout: overview cards | middle section | event timeline
+    // Vertical layout: overview | main | bottom
     let rows = Flex::vertical()
         .constraints([
             Constraint::Fixed(4),  // overview cards
-            Constraint::Min(8),    // middle (sessions + sidebar)
+            Constraint::Min(8),    // main (sessions + panes)
+            Constraint::Fixed(5),  // sparkline + escalations
             Constraint::Fixed(7),  // recent events
         ])
         .split(area);
@@ -21,26 +22,19 @@ pub fn render(frame: &mut Frame, area: Rect, app: &NtmApp) {
     // Overview cards row
     overview_cards::render(frame, rows[0], &app.stats);
 
-    // Middle section: sessions (left) | sidebar (right)
-    let mid_cols = Flex::horizontal()
+    // Main section: sessions (left) | panes (right)
+    let main_cols = Flex::horizontal()
         .constraints([
-            Constraint::Ratio(1, 2), // sessions + panes
-            Constraint::Ratio(1, 2), // activity + escalations
+            Constraint::Ratio(2, 5), // sessions
+            Constraint::Ratio(3, 5), // panes
         ])
         .split(rows[1]);
 
-    // Left column: session list + pane table
-    let left_rows = Flex::vertical()
-        .constraints([
-            Constraint::Ratio(1, 2),
-            Constraint::Ratio(1, 2),
-        ])
-        .split(mid_cols[0]);
-
     session_list::render(
         frame,
-        left_rows[0],
+        main_cols[0],
         &app.sessions,
+        &app.panes,
         &mut app.session_list_state.borrow_mut(),
         app.focus == FocusArea::SessionList,
     );
@@ -65,22 +59,22 @@ pub fn render(frame: &mut Frame, area: Rect, app: &NtmApp) {
 
     pane_table::render(
         frame,
-        left_rows[1],
+        main_cols[1],
         &session_panes,
         session_name,
         &mut app.pane_table_state.borrow_mut(),
         app.focus == FocusArea::PaneTable,
     );
 
-    // Right column: activity sparkline + escalations
-    let right_rows = Flex::vertical()
+    // Bottom row: sparkline (left) + escalations (right)
+    let bottom_cols = Flex::horizontal()
         .constraints([
-            Constraint::Fixed(5),  // sparkline
-            Constraint::Min(4),    // escalations
+            Constraint::Ratio(2, 5), // sparkline
+            Constraint::Ratio(3, 5), // escalations
         ])
-        .split(mid_cols[1]);
+        .split(rows[2]);
 
-    activity_spark::render(frame, right_rows[0], &app.events);
+    activity_spark::render(frame, bottom_cols[0], &app.events, false);
 
     let escalations: Vec<_> = app
         .events
@@ -91,18 +85,19 @@ pub fn render(frame: &mut Frame, area: Rect, app: &NtmApp) {
 
     escalation_inbox::render(
         frame,
-        right_rows[1],
+        bottom_cols[1],
         &escalations,
         &mut app.escalation_state.borrow_mut(),
         app.focus == FocusArea::EscalationInbox,
     );
 
-    // Bottom row: recent events
+    // Events row
     event_timeline::render(
         frame,
-        rows[2],
+        rows[3],
         &app.events,
         &mut app.event_timeline_state.borrow_mut(),
         app.focus == FocusArea::EventTimeline,
+        EventFilter::All,
     );
 }

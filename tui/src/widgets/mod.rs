@@ -6,3 +6,5 @@ pub mod escalation_inbox;
 pub mod activity_spark;
 pub mod status_badge;
 pub mod connection_bar;
+pub mod toast_manager;
+pub mod command_palette_wrapper;

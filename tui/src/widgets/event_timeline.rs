@@ -1,11 +1,10 @@
+use crate::msg::EventFilter;
 use crate::rpc::types::EventView;
 use crate::theme;
 use ftui::core::geometry::Rect;
 use ftui::render::frame::Frame;
 use ftui::PackedRgba;
 use ftui::Style;
-use ftui::widgets::block::Block;
-use ftui::widgets::borders::Borders;
 use ftui::widgets::list::{List, ListItem, ListState};
 use ftui::widgets::paragraph::Paragraph;
 use ftui::widgets::{StatefulWidget, Widget};
@@ -35,45 +34,48 @@ impl EventTimelineState {
     }
 }
 
-/// Render recent events.
+/// Render recent events with type icons and severity coloring.
 pub fn render(
     frame: &mut Frame,
     area: Rect,
     events: &[EventView],
     state: &mut EventTimelineState,
     focused: bool,
+    filter: EventFilter,
 ) {
-    let border_color = if focused {
-        theme::INFO
-    } else {
-        theme::BG_SURFACE
-    };
+    let block = theme::panel_block(" Recent Events ", focused);
 
-    let block = Block::new()
-        .title(" Recent Events ")
-        .borders(Borders::ALL)
-        .border_style(Style::new().fg(border_color))
-        .style(theme::raised_style());
+    let filtered: Vec<&EventView> = events
+        .iter()
+        .filter(|e| filter.matches(&e.event_type))
+        .collect();
 
-    if events.is_empty() {
-        let empty = Paragraph::new("  No events yet")
+    if filtered.is_empty() {
+        let msg = if filter == EventFilter::All {
+            "  No events yet"
+        } else {
+            "  No matching events"
+        };
+        let empty = Paragraph::new(msg)
             .style(theme::muted_style())
             .block(block);
         empty.render(area, frame);
         return;
     }
 
-    let items: Vec<ListItem> = events
+    let items: Vec<ListItem> = filtered
         .iter()
         .rev()
         .take(50)
         .map(|ev| {
             let time = format_timestamp(ev.detected_at);
             let color = event_type_color(&ev.event_type);
+            let icon = theme::event_type_icon(&ev.event_type);
             let session = truncate_id(&ev.session_id, 12);
             let pane = truncate_id(&ev.pane_id, 8);
+            let status = ev.status.as_deref().unwrap_or("");
             let line = format!(
-                " {time}  {etype:<12} {session}:{pane}",
+                " {time}  {icon} {etype:<12} {session}:{pane}  {status}",
                 etype = ev.event_type,
             );
             ListItem::new(line).style(Style::new().fg(color))
@@ -115,8 +117,6 @@ pub(crate) fn truncate_id(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // === EventTimelineState navigation tests (bd-283) ===
 
     #[test]
     fn test_new_default_selection() {
@@ -162,8 +162,6 @@ mod tests {
         assert_eq!(state.list_state.selected(), Some(0));
     }
 
-    // === Event type color mapping tests (bd-3gfm) ===
-
     #[test]
     fn test_escalation_returns_error_color() {
         assert_eq!(event_type_color("escalation"), theme::ERROR);
@@ -194,13 +192,9 @@ mod tests {
         assert_eq!(event_type_color(""), theme::TEXT_SECONDARY);
     }
 
-    // === Timestamp formatting tests (bd-zd7b partial) ===
-
     #[test]
     fn test_format_timestamp_valid() {
-        // 2024-01-15 12:30:00 UTC = 1705318200
         let result = format_timestamp(1705318200);
-        // Should produce HH:MM format
         assert!(result.len() == 5, "Expected HH:MM format, got: {result}");
         assert!(result.contains(':'), "Expected colon in time, got: {result}");
     }
@@ -219,8 +213,6 @@ mod tests {
         assert!(parts[0].len() == 2);
         assert!(parts[1].len() == 2);
     }
-
-    // === Truncate ID tests (bd-2x0m partial) ===
 
     #[test]
     fn test_truncate_id_short() {

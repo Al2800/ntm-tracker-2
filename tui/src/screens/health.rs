@@ -1,11 +1,10 @@
 use crate::app::NtmApp;
 use crate::theme;
+use crate::widgets::overview_cards;
 use ftui::core::geometry::Rect;
 use ftui::layout::{Constraint, Flex};
 use ftui::render::frame::Frame;
 use ftui::Style;
-use ftui::widgets::block::Block;
-use ftui::widgets::borders::Borders;
 use ftui::widgets::paragraph::Paragraph;
 use ftui::widgets::Widget;
 
@@ -13,20 +12,28 @@ use ftui::widgets::Widget;
 pub fn render(frame: &mut Frame, area: Rect, app: &NtmApp) {
     let rows = Flex::vertical()
         .constraints([
-            Constraint::Fixed(5),  // connection status
+            Constraint::Fixed(5),  // connection + daemon side by side
             Constraint::Fixed(7),  // stats
             Constraint::Min(4),    // daemon info
         ])
         .split(area);
 
-    // Connection status
-    render_connection_card(frame, rows[0], app);
+    // Top row: connection + daemon info side by side
+    let top_cols = Flex::horizontal()
+        .constraints([
+            Constraint::Ratio(1, 2),
+            Constraint::Ratio(1, 2),
+        ])
+        .split(rows[0]);
+
+    render_connection_card(frame, top_cols[0], app);
+    render_daemon_card(frame, top_cols[1], app);
 
     // Stats summary
     render_stats_card(frame, rows[1], app);
 
-    // Daemon info
-    render_daemon_card(frame, rows[2], app);
+    // Cache info
+    render_cache_card(frame, rows[2], app);
 }
 
 fn render_connection_card(frame: &mut Frame, area: Rect, app: &NtmApp) {
@@ -37,18 +44,19 @@ fn render_connection_card(frame: &mut Frame, area: Rect, app: &NtmApp) {
         crate::msg::ConnState::Error(_) => ("✕", theme::ERROR),
     };
 
+    let error_line = if let crate::msg::ConnState::Error(e) = &app.conn_state {
+        format!("\n  Last error: {e}")
+    } else {
+        "\n  Last error: none".to_string()
+    };
+
     let text = format!(
-        "  {icon} Connection: {}\n  Daemon version: {}",
-        app.conn_state.label(),
-        app.daemon_version,
+        "  {icon} {status}\n  Version: {version}{error_line}",
+        status = app.conn_state.label(),
+        version = app.daemon_version,
     );
 
-    let block = Block::new()
-        .title(" Connection ")
-        .borders(Borders::ALL)
-        .border_style(Style::new().fg(color))
-        .style(theme::raised_style());
-
+    let block = theme::panel_block(" Connection ", true);
     let para = Paragraph::new(text)
         .style(Style::new().fg(color).bg(theme::BG_RAISED))
         .block(block);
@@ -56,19 +64,13 @@ fn render_connection_card(frame: &mut Frame, area: Rect, app: &NtmApp) {
     para.render(area, frame);
 }
 
-fn render_stats_card(frame: &mut Frame, area: Rect, app: &NtmApp) {
-    let s = &app.stats;
+fn render_daemon_card(frame: &mut Frame, area: Rect, app: &NtmApp) {
     let text = format!(
-        "  Sessions: {}    Panes: {}\n  Compacts: {}    Active: {}m\n  Est. Tokens: {}",
-        s.sessions, s.panes, s.total_compacts, s.active_minutes, s.estimated_tokens,
+        "  Protocol: JSON-RPC 2.0\n  Transport: stdio\n  Sessions: {}",
+        app.sessions.len(),
     );
 
-    let block = Block::new()
-        .title(" Statistics ")
-        .borders(Borders::ALL)
-        .border_style(Style::new().fg(theme::BG_SURFACE))
-        .style(theme::raised_style());
-
+    let block = theme::panel_block(" Daemon ", false);
     let para = Paragraph::new(text)
         .style(Style::new().fg(theme::TEXT_PRIMARY).bg(theme::BG_RAISED))
         .block(block);
@@ -76,20 +78,34 @@ fn render_stats_card(frame: &mut Frame, area: Rect, app: &NtmApp) {
     para.render(area, frame);
 }
 
-fn render_daemon_card(frame: &mut Frame, area: Rect, app: &NtmApp) {
-    let event_count = app.events.len();
-    let last_id = app.last_event_id;
-
+fn render_stats_card(frame: &mut Frame, area: Rect, app: &NtmApp) {
+    let s = &app.stats;
+    let tokens = theme::format_tokens(s.estimated_tokens);
+    let active = overview_cards::format_active_time(s.active_minutes);
     let text = format!(
-        "  Events in cache: {event_count}\n  Last event ID: {last_id}",
+        "  Sessions: {}    Panes: {}\n  Compacts: {}    Active: {active}\n  Est. Tokens: {tokens}",
+        s.sessions, s.panes, s.total_compacts,
     );
 
-    let block = Block::new()
-        .title(" Daemon Info ")
-        .borders(Borders::ALL)
-        .border_style(Style::new().fg(theme::BG_SURFACE))
-        .style(theme::raised_style());
+    let block = theme::panel_block(" Statistics ", false);
+    let para = Paragraph::new(text)
+        .style(Style::new().fg(theme::TEXT_PRIMARY).bg(theme::BG_RAISED))
+        .block(block);
 
+    para.render(area, frame);
+}
+
+fn render_cache_card(frame: &mut Frame, area: Rect, app: &NtmApp) {
+    let event_count = app.events.len();
+    let last_id = app.last_event_id;
+    let escalation_count = app.events.iter().filter(|e| e.event_type == "escalation").count();
+    let compact_count = app.events.iter().filter(|e| e.event_type == "compact").count();
+
+    let text = format!(
+        "  Events in cache: {event_count}\n  Last event ID: {last_id}\n  Escalations: {escalation_count}    Compacts: {compact_count}",
+    );
+
+    let block = theme::panel_block(" Cache Info ", false);
     let para = Paragraph::new(text)
         .style(Style::new().fg(theme::TEXT_SECONDARY).bg(theme::BG_RAISED))
         .block(block);

@@ -111,9 +111,9 @@ fn test_full_navigation_flow() {
 
     logger.step("Navigate panes: j, j");
     send_key!(KeyCode::Char('j'), "j (pane down)");
-    assert_eq!(app.pane_table_state.borrow().list_state.selected(), Some(1));
+    assert_eq!(app.pane_table_state.borrow().table_state.selected, Some(1));
     send_key!(KeyCode::Char('j'), "j (pane down)");
-    assert_eq!(app.pane_table_state.borrow().list_state.selected(), Some(2));
+    assert_eq!(app.pane_table_state.borrow().table_state.selected, Some(2));
     logger.step_result(true, "Pane navigation correct (s2 has 3 panes)");
 
     logger.step("Switch tabs: 2, 3, 4, 1");
@@ -186,8 +186,8 @@ fn test_vim_and_arrow_keys_equivalent() {
     app_arrow.update(key_msg(KeyCode::Down));
 
     assert_eq!(
-        app_vim.pane_table_state.borrow().list_state.selected(),
-        app_arrow.pane_table_state.borrow().list_state.selected(),
+        app_vim.pane_table_state.borrow().table_state.selected,
+        app_arrow.pane_table_state.borrow().table_state.selected,
         "Pane table: vim keys == arrow keys"
     );
     logger.step_result(true, "Pane table: vim keys == arrow keys");

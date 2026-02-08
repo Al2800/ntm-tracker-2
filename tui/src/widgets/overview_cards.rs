@@ -10,35 +10,37 @@ use ftui::widgets::borders::Borders;
 use ftui::widgets::paragraph::Paragraph;
 use ftui::widgets::Widget;
 
-/// Render 4 stat cards in a horizontal row.
+/// Render 5 stat cards in a horizontal row.
 pub fn render(frame: &mut Frame, area: Rect, stats: &StatsSummary) {
     let cols = Flex::horizontal()
         .constraints([
-            Constraint::Ratio(1, 4),
-            Constraint::Ratio(1, 4),
-            Constraint::Ratio(1, 4),
-            Constraint::Ratio(1, 4),
+            Constraint::Ratio(1, 5),
+            Constraint::Ratio(1, 5),
+            Constraint::Ratio(1, 5),
+            Constraint::Ratio(1, 5),
+            Constraint::Ratio(1, 5),
         ])
         .split(area);
 
-    let cards: [(&str, String, PackedRgba); 4] = [
+    let cards: [(&str, String, PackedRgba); 5] = [
         ("Sessions", format!("{}", stats.sessions), theme::INFO),
         ("Panes", format!("{}", stats.panes), theme::ACTIVE),
         ("Compacts", format!("{}", stats.total_compacts), theme::ACCENT),
+        ("Tokens", theme::format_tokens(stats.estimated_tokens), theme::IDLE),
         (
             "Active",
             format_active_time(stats.active_minutes),
-            theme::IDLE,
+            theme::PAUSED,
         ),
     ];
 
     for (i, (label, value, color)) in cards.iter().enumerate() {
         let block = Block::new()
             .borders(Borders::ALL)
-            .border_style(Style::new().fg(theme::BG_SURFACE))
+            .border_style(Style::new().fg(theme::BORDER_DIM))
             .style(Style::new().fg(*color).bg(theme::BG_RAISED));
 
-        let text = format!("  {label}\n  {value}");
+        let text = format!("  {value}\n  {label}");
         let para = Paragraph::new(text)
             .style(Style::new().fg(*color).bg(theme::BG_RAISED))
             .block(block);

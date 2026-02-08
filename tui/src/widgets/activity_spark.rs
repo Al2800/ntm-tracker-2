@@ -3,8 +3,6 @@ use crate::theme;
 use ftui::core::geometry::Rect;
 use ftui::render::frame::Frame;
 use ftui::Style;
-use ftui::widgets::block::Block;
-use ftui::widgets::borders::Borders;
 use ftui::widgets::paragraph::Paragraph;
 use ftui::widgets::Widget;
 
@@ -35,12 +33,8 @@ pub(crate) fn spark_index(value: u32, max_val: u32) -> usize {
 }
 
 /// Render a 24-hour sparkline based on event timestamps.
-pub fn render(frame: &mut Frame, area: Rect, events: &[EventView]) {
-    let block = Block::new()
-        .title(" Activity (24h) ")
-        .borders(Borders::ALL)
-        .border_style(Style::new().fg(theme::BG_SURFACE))
-        .style(theme::raised_style());
+pub fn render(frame: &mut Frame, area: Rect, events: &[EventView], focused: bool) {
+    let block = theme::panel_block(" Activity (24h) ", focused);
 
     let now = chrono::Utc::now().timestamp();
     let timestamps: Vec<i64> = events.iter().map(|e| e.detected_at).collect();
@@ -116,7 +110,6 @@ mod tests {
         let now = 200000;
         let timestamps: Vec<i64> = (0..24).map(|h| now - 86400 + h * 3600 + 1800).collect();
         let (buckets, _max_val) = bucket_events(&timestamps, now);
-        // Each hour should have 1 event
         for &b in &buckets {
             assert_eq!(b, 1, "Expected 1 event per bucket, got: {buckets:?}");
         }

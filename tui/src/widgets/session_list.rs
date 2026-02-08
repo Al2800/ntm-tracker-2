@@ -1,10 +1,8 @@
-use crate::rpc::types::SessionView;
+use crate::rpc::types::{PaneView, SessionView};
 use crate::theme;
 use ftui::core::geometry::Rect;
 use ftui::render::frame::Frame;
 use ftui::Style;
-use ftui::widgets::block::Block;
-use ftui::widgets::borders::Borders;
 use ftui::widgets::list::{List, ListItem, ListState};
 use ftui::widgets::paragraph::Paragraph;
 use ftui::widgets::{StatefulWidget, Widget};
@@ -62,25 +60,16 @@ impl SessionListState {
     }
 }
 
-/// Render the session list.
+/// Render the session list with tree-like guides, badges, and relative times.
 pub fn render(
     frame: &mut Frame,
     area: Rect,
     sessions: &[SessionView],
+    panes: &[PaneView],
     state: &mut SessionListState,
     focused: bool,
 ) {
-    let border_color = if focused {
-        theme::INFO
-    } else {
-        theme::BG_SURFACE
-    };
-
-    let block = Block::new()
-        .title(" Sessions ")
-        .borders(Borders::ALL)
-        .border_style(Style::new().fg(border_color))
-        .style(theme::raised_style());
+    let block = theme::panel_block(" Sessions ", focused);
 
     if sessions.is_empty() {
         let empty = Paragraph::new("  No sessions")
@@ -90,26 +79,55 @@ pub fn render(
         return;
     }
 
-    let items: Vec<ListItem> = sessions
-        .iter()
-        .enumerate()
-        .map(|(i, s)| {
-            let marker = if state.expanded_index == Some(i) {
-                "▾"
-            } else {
-                "▸"
-            };
-            let badge = theme::status_badge(&s.status);
-            let color = theme::status_color(&s.status);
-            let line = format!(
-                " {marker} {name:<16} {badge} {status:<8} {count}",
-                name = truncate(&s.name, 16),
-                status = s.status,
-                count = s.pane_count
-            );
-            ListItem::new(line).style(Style::new().fg(color))
-        })
-        .collect();
+    let mut items: Vec<ListItem> = Vec::new();
+
+    for (i, s) in sessions.iter().enumerate() {
+        let is_expanded = state.expanded_index == Some(i);
+        let marker = if is_expanded { "▾" } else { "▸" };
+        let badge = theme::status_badge(&s.status);
+        let color = theme::status_color(&s.status);
+        let rel_time = theme::relative_time(s.last_seen_at);
+
+        let line = format!(
+            " {marker} {name:<16} {badge} {status:<8} {count}p  {rel_time}",
+            name = truncate(&s.name, 16),
+            status = s.status,
+            count = s.pane_count,
+        );
+        items.push(ListItem::new(line).style(Style::new().fg(color)));
+
+        // If expanded, show inline pane summaries with tree guide chars
+        if is_expanded {
+            let session_panes: Vec<&PaneView> = panes
+                .iter()
+                .filter(|p| p.session_id == s.session_id)
+                .collect();
+
+            for (pi, pane) in session_panes.iter().enumerate() {
+                let guide = if pi == session_panes.len() - 1 {
+                    theme::TREE_LAST
+                } else {
+                    theme::TREE_BRANCH
+                };
+                let agent = theme::agent_label(pane.agent_type.as_deref().unwrap_or("--"));
+                let p_badge = theme::status_badge(&pane.status);
+                let p_color = theme::status_color(&pane.status);
+                let cmd = match pane.status.as_str() {
+                    "waiting" | "paused" => {
+                        pane.status_reason.as_deref().unwrap_or("waiting...")
+                    }
+                    _ => pane.current_command.as_deref().unwrap_or("--"),
+                };
+                let pane_line = format!(
+                    "   {guide}#{idx} {agent} {p_badge} {status:<8} {cmd}",
+                    idx = pane.pane_index,
+                    status = pane.status,
+                    cmd = truncate(cmd, 20),
+                );
+                items.push(ListItem::new(pane_line).style(Style::new().fg(p_color)));
+            }
+        }
+    }
 
     let list = List::new(items)
         .block(block)
