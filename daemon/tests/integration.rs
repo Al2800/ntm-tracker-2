@@ -361,3 +361,167 @@ fn invalid_params_returns_error() {
     let err = result.unwrap_err();
     assert_eq!(err.code, "INVALID_PARAMS");
 }
+
+// ============================================================================
+// Concurrent RPC Tests (bd-1bgf)
+// ============================================================================
+
+#[test]
+fn concurrent_snapshot_and_health() {
+    let ctx = Arc::new(test_context_with_data());
+    let ctx1 = ctx.clone();
+    let ctx2 = ctx.clone();
+
+    let t1 = std::thread::spawn(move || handle("snapshot.get", json!(null), &ctx1));
+    let t2 = std::thread::spawn(move || handle("health.get", json!(null), &ctx2));
+
+    let r1 = t1.join().unwrap();
+    let r2 = t2.join().unwrap();
+
+    assert!(r1.is_ok(), "snapshot.get should succeed");
+    assert!(r2.is_ok(), "health.get should succeed");
+
+    let snap = r1.unwrap();
+    assert!(snap["sessions"].is_array());
+    assert!(snap["panes"].is_array());
+
+    let health = r2.unwrap();
+    assert!(health["status"].is_string());
+}
+
+#[test]
+fn concurrent_sessions_and_events() {
+    let ctx = Arc::new(test_context_with_data());
+    let ctx1 = ctx.clone();
+    let ctx2 = ctx.clone();
+
+    let t1 = std::thread::spawn(move || handle("sessions.list", json!(null), &ctx1));
+    let t2 = std::thread::spawn(move || handle("events.list", json!(null), &ctx2));
+
+    let sessions_result = t1.join().unwrap().unwrap();
+    let events_result = t2.join().unwrap().unwrap();
+
+    let sessions = sessions_result["sessions"].as_array().unwrap();
+    let events = events_result["events"].as_array().unwrap();
+
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(events.len(), 1);
+}
+
+#[test]
+fn ten_rapid_concurrent_requests() {
+    let ctx = Arc::new(test_context_with_data());
+
+    let methods = vec![
+        "health.get",
+        "sessions.list",
+        "snapshot.get",
+        "events.list",
+        "stats.summary",
+        "capabilities.get",
+        "health.get",
+        "sessions.list",
+        "snapshot.get",
+        "events.list",
+    ];
+
+    let handles: Vec<_> = methods
+        .into_iter()
+        .map(|method| {
+            let ctx = ctx.clone();
+            let method = method.to_string();
+            std::thread::spawn(move || {
+                let result = handle(&method, json!(null), &ctx);
+                (method, result)
+            })
+        })
+        .collect();
+
+    let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+
+    // All 10 should succeed
+    for (method, result) in &results {
+        assert!(
+            result.is_ok(),
+            "method {method} should succeed, got: {:?}",
+            result.as_ref().unwrap_err()
+        );
+    }
+    assert_eq!(results.len(), 10);
+}
+
+#[test]
+fn concurrent_reads_and_writes() {
+    // Tests concurrent read (list) and write (config.set) operations
+    let mut admin_ctx = test_context_with_data();
+    admin_ctx.is_admin = true;
+    let ctx = Arc::new(admin_ctx);
+
+    let ctx_read = ctx.clone();
+    let ctx_write = ctx.clone();
+
+    let reader = std::thread::spawn(move || {
+        let mut results = Vec::new();
+        for _ in 0..5 {
+            results.push(handle("sessions.list", json!(null), &ctx_read));
+        }
+        results
+    });
+
+    let writer = std::thread::spawn(move || {
+        let mut results = Vec::new();
+        for _ in 0..5 {
+            results.push(handle("config.set", json!({"key": "value"}), &ctx_write));
+        }
+        results
+    });
+
+    let read_results = reader.join().unwrap();
+    let write_results = writer.join().unwrap();
+
+    // All reads should succeed
+    for r in &read_results {
+        assert!(r.is_ok());
+    }
+    // All writes should succeed (admin context)
+    for r in &write_results {
+        assert!(r.is_ok());
+    }
+}
+
+#[test]
+fn concurrent_valid_and_invalid_requests() {
+    // Mix of valid and invalid requests — errors shouldn't affect valid ones
+    let ctx = Arc::new(test_context_with_data());
+
+    let handles: Vec<_> = (0..10)
+        .map(|i| {
+            let ctx = ctx.clone();
+            std::thread::spawn(move || {
+                if i % 2 == 0 {
+                    // Valid request
+                    ("health.get", handle("health.get", json!(null), &ctx))
+                } else {
+                    // Invalid request
+                    (
+                        "no.such.method",
+                        handle("no.such.method", json!(null), &ctx),
+                    )
+                }
+            })
+        })
+        .collect();
+
+    let mut successes = 0;
+    let mut errors = 0;
+    for h in handles {
+        let (method, result) = h.join().unwrap();
+        match (method, &result) {
+            ("health.get", Ok(_)) => successes += 1,
+            ("no.such.method", Err(_)) => errors += 1,
+            _ => panic!("unexpected result for {method}: {result:?}"),
+        }
+    }
+    assert_eq!(successes, 5);
+    assert_eq!(errors, 5);
+}
