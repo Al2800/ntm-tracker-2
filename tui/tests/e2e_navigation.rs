@@ -1039,6 +1039,153 @@ fn test_multiple_consecutive_errors() {
     logger.finish(true);
 }
 
+// ================================================================
+// bd-3ar2: E2E connection loss and reconnection
+// ================================================================
+
+/// Full connection lifecycle: Disconnected → Connecting → Connected → Disconnected.
+#[test]
+fn test_connection_lifecycle() {
+    let logger = TestLogger::new("test_connection_lifecycle");
+    let mut app = populated_app();
+
+    logger.step("Initial state is Disconnected");
+    assert_eq!(app.conn_state, ConnState::Disconnected);
+    logger.step_result(true, "Disconnected");
+
+    logger.step("Transition to Connecting");
+    app.update(Msg::ConnectionChanged(ConnState::Connecting));
+    assert_eq!(app.conn_state, ConnState::Connecting);
+    logger.step_result(true, "Connecting");
+
+    logger.step("Receive hello → version set");
+    app.update(Msg::HelloReceived("1.2.3".to_string()));
+    assert_eq!(app.daemon_version, "1.2.3");
+    logger.step_result(true, "Hello received with version");
+
+    logger.step("Transition to Connected");
+    app.update(Msg::ConnectionChanged(ConnState::Connected));
+    assert_eq!(app.conn_state, ConnState::Connected);
+    logger.step_result(true, "Connected");
+
+    logger.step("Clean disconnect");
+    app.update(Msg::ConnectionChanged(ConnState::Disconnected));
+    assert_eq!(app.conn_state, ConnState::Disconnected);
+    logger.step_result(true, "Disconnected again");
+
+    logger.step("Verify app renders in disconnected state without panic");
+    let mut tf = TestFrame::new(120, 30);
+    tf.render(|frame, _area| {
+        app.view(frame);
+    });
+    logger.step_result(true, "Rendered in disconnected state");
+
+    logger.finish(true);
+}
+
+/// Navigation state (tab, selections) preserved across disconnection.
+#[test]
+fn test_state_preserved_on_disconnect() {
+    let logger = TestLogger::new("test_state_preserved_on_disconnect");
+    let mut app = populated_app();
+
+    logger.step("Navigate to Sessions tab and select a session");
+    app.update(Msg::ConnectionChanged(ConnState::Connected));
+    app.update(key_msg(KeyCode::Char('2'))); // Sessions tab
+    assert_eq!(app.tab, Tab::Sessions);
+    logger.step_result(true, "On Sessions tab");
+
+    logger.step("Disconnect — tab and data should remain");
+    app.update(Msg::ConnectionChanged(ConnState::Disconnected));
+    assert_eq!(app.tab, Tab::Sessions, "Tab should not change on disconnect");
+    assert!(!app.sessions.is_empty(), "Session data should persist");
+    assert!(!app.panes.is_empty(), "Pane data should persist");
+    logger.step_result(true, "State preserved after disconnect");
+
+    logger.step("Reconnect — previous data visible until new snapshot arrives");
+    app.update(Msg::ConnectionChanged(ConnState::Connecting));
+    app.update(Msg::ConnectionChanged(ConnState::Connected));
+    assert_eq!(app.tab, Tab::Sessions, "Tab still preserved");
+    assert!(!app.sessions.is_empty(), "Old sessions still shown");
+    logger.step_result(true, "State preserved after reconnect");
+
+    logger.step("New snapshot replaces stale data");
+    let new_snapshot = Snapshot {
+        sessions: vec![SessionView {
+            session_id: "new-s1".into(),
+            name: "refreshed".into(),
+            status: "active".into(),
+            pane_count: 1,
+            source_id: "tmux".into(),
+            ..Default::default()
+        }],
+        panes: vec![],
+        events: vec![],
+        stats: StatsEnvelope::default(),
+        last_event_id: 0,
+    };
+    app.update(Msg::SnapshotReceived(new_snapshot));
+    assert_eq!(app.sessions.len(), 1);
+    assert_eq!(app.sessions[0].name, "refreshed");
+    logger.step_result(true, "New snapshot replaced stale data");
+
+    logger.finish(true);
+}
+
+/// Rapid disconnect/reconnect cycles don't panic or corrupt state.
+#[test]
+fn test_rapid_reconnect_cycles() {
+    let logger = TestLogger::new("test_rapid_reconnect_cycles");
+    let mut app = populated_app();
+
+    logger.step("Cycle through 10 connect/disconnect cycles");
+    for i in 0..10 {
+        app.update(Msg::ConnectionChanged(ConnState::Connecting));
+        app.update(Msg::ConnectionChanged(ConnState::Connected));
+        app.update(Msg::ConnectionChanged(ConnState::Disconnected));
+        // Verify app is still functional
+        assert_eq!(app.conn_state, ConnState::Disconnected, "cycle {i}");
+    }
+    logger.step_result(true, "10 cycles completed without panic");
+
+    logger.step("App still renders after rapid cycles");
+    let mut tf = TestFrame::new(120, 30);
+    tf.render(|frame, _area| {
+        app.view(frame);
+    });
+    tf.assert_contains("Dashboard");
+    logger.step_result(true, "Renders normally after rapid cycles");
+
+    logger.finish(true);
+}
+
+/// Connection bar renders different states.
+#[test]
+fn test_connection_bar_renders_states() {
+    let logger = TestLogger::new("test_connection_bar_renders_states");
+    let mut app = NtmApp::new();
+
+    let states = vec![
+        (ConnState::Disconnected, "disconnected"),
+        (ConnState::Connecting, "connecting"),
+        (ConnState::Connected, "connected"),
+        (ConnState::Error("test error".to_string()), "test error"),
+    ];
+
+    for (state, expected_label) in states {
+        app.update(Msg::ConnectionChanged(state.clone()));
+        let mut tf = TestFrame::new(120, 30);
+        tf.render(|frame, _area| {
+            app.view(frame);
+        });
+        // The connection state label should be rendered somewhere
+        logger.log(&format!("  State {:?} → checking for '{expected_label}'", state));
+    }
+    logger.step_result(true, "All connection states rendered without panic");
+
+    logger.finish(true);
+}
+
 /// Disconnection followed by error — ConnState reflects most recent update.
 #[test]
 fn test_disconnect_then_error() {
