@@ -134,8 +134,24 @@ impl NtmApp {
                 return;
             }
         };
-        if let Err(e) = tx.blocking_send(json_str) {
-            warn!("fire_rpc send failed: {e}");
+        match tx.try_send(json_str) {
+            Ok(()) => {}
+            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                warn!("fire_rpc send failed: channel closed");
+            }
+            Err(tokio::sync::mpsc::error::TrySendError::Full(payload)) => {
+                // Avoid blocking on tokio runtime threads: blocking_send panics within a runtime.
+                if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    let tx2 = tx.clone();
+                    handle.spawn(async move {
+                        if let Err(e) = tx2.send(payload).await {
+                            warn!("fire_rpc send failed: {e}");
+                        }
+                    });
+                } else if let Err(e) = tx.blocking_send(payload) {
+                    warn!("fire_rpc send failed: {e}");
+                }
+            }
         }
     }
 
@@ -1592,7 +1608,7 @@ mod tests {
         if let Some(ConfirmAction::KillSession { session_name, .. }) = &app.pending_confirm {
             assert_eq!(session_name, "project-a");
         } else {
-            panic!("Expected KillSession confirm action");
+            assert!(false, "Expected KillSession confirm action");
         }
     }
 
@@ -1760,7 +1776,7 @@ mod tests {
             assert_eq!(pane_id, "%1");
             assert!(pane_label.contains("project-a"));
         } else {
-            panic!("Expected PaneSend confirm");
+            assert!(false, "Expected PaneSend confirm");
         }
     }
 
@@ -1788,7 +1804,7 @@ mod tests {
         if let Some(ConfirmAction::PaneSend { pane_id, .. }) = &app.pending_confirm {
             assert_eq!(pane_id, "%1"); // tmux_pane_id of first pane
         } else {
-            panic!("Expected PaneSend");
+            assert!(false, "Expected PaneSend");
         }
     }
 

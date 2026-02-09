@@ -1,13 +1,23 @@
 mod helpers;
 
 use helpers::logging::TestLogger;
+use ntm_tracker_tui::app::NtmApp;
 use ntm_tracker_tui::msg::{ConnState, Msg};
+use ntm_tracker_tui::msg::{ConfirmAction, FocusArea, ToastLevel};
+use ntm_tracker_tui::rpc::types::{PaneView, SessionView, Snapshot, StatsEnvelope, StatsSummary};
 use ntm_tracker_tui::rpc::types::JsonRpcRequest;
+use ftui::{Event, KeyCode, KeyEvent};
+use ftui::Model;
 use std::time::Duration;
+use tokio::sync::mpsc;
 use tokio::sync::Semaphore;
 
 /// Only allow one daemon-spawning test at a time.
 static DAEMON_SEM: Semaphore = Semaphore::const_new(1);
+
+fn key_msg(code: KeyCode) -> Msg {
+    Msg::Term(Event::Key(KeyEvent::new(code)))
+}
 
 // ================================================================
 // bd-38ag: E2E daemon spawn and hello handshake
@@ -37,7 +47,7 @@ async fn test_daemon_handshake_and_snapshots() {
         }
         None => {
             harness.logger.step_result(false, "Timed out waiting for hello");
-            panic!("Did not receive hello within timeout");
+            assert!(false, "Did not receive hello within timeout");
         }
     }
 
@@ -113,7 +123,7 @@ async fn test_daemon_handshake_and_snapshots() {
         }
         None => {
             harness.logger.step_result(false, "Timed out waiting for snapshot");
-            panic!("Did not receive snapshot within timeout");
+            assert!(false, "Did not receive snapshot within timeout");
         }
     }
 
@@ -237,6 +247,137 @@ async fn test_disconnection_on_daemon_kill() {
 // ================================================================
 // bd-17vb: E2E end-to-end data flow from daemon to app state
 // ================================================================
+
+// ================================================================
+// bd-3q5u: E2E paneSend full-stack (modal -> type/paste -> RPC notify)
+// ================================================================
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_pane_send_full_stack_sends_rpc_and_updates_state() {
+    let _permit = DAEMON_SEM.acquire().await.unwrap();
+    let mut harness = helpers::TestHarness::spawn("test_pane_send_full_stack_sends_rpc_and_updates_state")
+        .await
+        .expect("Failed to spawn daemon");
+
+    harness.logger.step("Waiting for core.hello notification");
+    let hello = harness.wait_for_hello(Duration::from_secs(10)).await;
+    assert!(hello.is_some(), "Expected hello from daemon");
+    harness.logger.step_result(true, "core.hello received");
+
+    // Wire NtmApp RPC notifications into the daemon's stdin, while also capturing sent JSON.
+    harness.logger.step("Wiring NtmApp rpc_tx to daemon stdin (capture + forward)");
+    let (rpc_tx, mut rpc_rx) = mpsc::channel::<String>(64);
+    let (cap_tx, mut cap_rx) = mpsc::channel::<String>(64);
+    let forward_tx = harness.stdin_tx.clone();
+    tokio::spawn(async move {
+        while let Some(line) = rpc_rx.recv().await {
+            let _ = cap_tx.send(line.clone()).await;
+            let _ = forward_tx.send(line).await;
+        }
+    });
+    harness.logger.step_result(true, "RPC channel wired");
+
+    // Use a synthetic snapshot to ensure we have at least one session/pane to act on,
+    // while still using a real daemon process for the RPC send.
+    let mut app = NtmApp::new();
+    app.set_rpc_tx(rpc_tx);
+
+    let session = SessionView {
+        session_id: "s1".to_string(),
+        name: "project-a".to_string(),
+        status: "active".to_string(),
+        pane_count: 1,
+        source_id: "tmux".to_string(),
+        created_at: 1,
+        last_seen_at: 1,
+        ..Default::default()
+    };
+    let pane = PaneView {
+        pane_id: "p1".to_string(),
+        session_id: "s1".to_string(),
+        status: "active".to_string(),
+        pane_index: 0,
+        tmux_pane_id: Some("%0".to_string()),
+        created_at: 1,
+        last_seen_at: 1,
+        ..Default::default()
+    };
+    let snapshot = Snapshot {
+        sessions: vec![session],
+        panes: vec![pane],
+        events: vec![],
+        stats: StatsEnvelope {
+            summary: StatsSummary {
+                sessions: 1,
+                panes: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        last_event_id: 0,
+    };
+
+    harness.logger.step("Feeding SnapshotReceived into app state");
+    app.update(Msg::SnapshotReceived(snapshot));
+    // SessionListState selection depends on row_map, which is normally built during render.
+    // In E2E tests we need to build it explicitly so session-aware navigation works.
+    app.session_list_state
+        .borrow_mut()
+        .build_row_map(&app.sessions, &app.panes);
+    harness.logger.step_result(true, "App state populated");
+
+    harness.logger.step("Focusing PaneTable and opening PaneSend modal with 's'");
+    app.update(key_msg(KeyCode::Tab));
+    assert_eq!(app.focus, FocusArea::PaneTable);
+    app.update(key_msg(KeyCode::Char('s')));
+    assert!(
+        matches!(app.pending_confirm, Some(ConfirmAction::PaneSend { .. })),
+        "Expected PaneSend modal to be open"
+    );
+    harness.logger.step_result(true, "PaneSend modal open");
+
+    harness.logger.step("Typing 'echo ' then pasting 'hello'");
+    for ch in "echo ".chars() {
+        app.update(key_msg(KeyCode::Char(ch)));
+    }
+    let paste = ftui::PasteEvent::bracketed("hello");
+    app.update(Msg::Term(Event::Paste(paste)));
+    assert_eq!(app.send_input_buf, "echo hello");
+    harness.logger.step_result(true, "Input buffer accumulated");
+
+    harness.logger.step("Pressing Enter to send PaneSend");
+    app.update(key_msg(KeyCode::Enter));
+    assert!(app.pending_confirm.is_none(), "Modal should close after send");
+    assert!(app.send_input_buf.is_empty(), "send_input_buf should be cleared after send");
+    let toast = app.toast_queue.borrow().active().cloned();
+    assert!(toast.is_some(), "Expected a toast after send");
+    let toast = toast.unwrap();
+    assert_eq!(toast.level, ToastLevel::Success);
+    harness.logger.step_result(true, "Modal closed and toast recorded");
+
+    harness.logger.step("Capturing JSON-RPC notification sent by app");
+    let sent = tokio::time::timeout(Duration::from_secs(5), cap_rx.recv())
+        .await
+        .expect("timeout waiting for app->daemon RPC")
+        .expect("no RPC captured");
+    let parsed: serde_json::Value = serde_json::from_str(&sent).expect("valid JSON-RPC");
+    assert_eq!(parsed["jsonrpc"], "2.0");
+    assert_eq!(parsed["method"], "actions.paneSend");
+    assert!(parsed.get("id").is_none(), "Expected JSON-RPC notification (no id)");
+    assert_eq!(parsed["params"]["paneId"], "%0");
+    assert_eq!(parsed["params"]["payload"], "echo hello");
+    assert_eq!(parsed["params"]["enter"], true);
+    harness.logger.step_result(true, "RPC notification format validated");
+
+    // Daemon should keep streaming snapshots, even if it ignores PaneSend in this environment.
+    harness.logger.step("Verifying daemon still alive after PaneSend");
+    let alive = harness.wait_for_snapshot(Duration::from_secs(10)).await.is_some();
+    assert!(alive, "Expected daemon to continue emitting snapshots");
+    harness.logger.step_result(true, "Daemon still alive");
+
+    harness.shutdown().await;
+    harness.logger.finish(true);
+}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_data_flow_snapshot_to_app() {
