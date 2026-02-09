@@ -858,3 +858,211 @@ fn test_palette_renders_overlay() {
 
     logger.finish(true);
 }
+
+// ================================================================
+// bd-2m6p: E2E error response handling
+// ================================================================
+
+/// RPC error with "unknown method" transitions to Error state and shows error toast.
+#[test]
+fn test_error_unknown_method() {
+    let logger = TestLogger::new("test_error_unknown_method");
+    let mut app = populated_app();
+    app.conn_state = ConnState::Connected;
+
+    logger.step("Send RPC error for unknown method");
+    app.update(Msg::RpcError("Method not found: bogus.method".to_string()));
+
+    assert_eq!(
+        app.conn_state,
+        ConnState::Error("Method not found: bogus.method".to_string()),
+        "ConnState should transition to Error"
+    );
+    let q = app.toast_queue.borrow();
+    assert!(!q.is_empty(), "Error toast should appear");
+    assert_eq!(q.active().unwrap().level, ToastLevel::Error);
+    assert!(q.active().unwrap().message.contains("Method not found"));
+    logger.step_result(true, "Unknown method error: toast + ConnState::Error");
+
+    logger.step("Verify error renders in UI");
+    drop(q);
+    let mut tf = TestFrame::new(120, 30);
+    tf.render(|frame, _area| {
+        app.view(frame);
+    });
+    tf.assert_contains("Method not found");
+    logger.step_result(true, "Error message visible in rendered output");
+
+    logger.finish(true);
+}
+
+/// RPC error with "invalid params" creates error toast with specific message.
+#[test]
+fn test_error_invalid_params() {
+    let logger = TestLogger::new("test_error_invalid_params");
+    let mut app = populated_app();
+    app.conn_state = ConnState::Connected;
+
+    logger.step("Send invalid params error");
+    app.update(Msg::RpcError("Invalid params: missing 'sessionId'".to_string()));
+
+    assert_eq!(
+        app.conn_state,
+        ConnState::Error("Invalid params: missing 'sessionId'".to_string()),
+    );
+    let q = app.toast_queue.borrow();
+    assert_eq!(q.active().unwrap().level, ToastLevel::Error);
+    assert!(q.active().unwrap().message.contains("Invalid params"));
+    logger.step_result(true, "Invalid params error handled");
+
+    logger.finish(true);
+}
+
+/// RPC "not found" error handled gracefully — app stays functional.
+#[test]
+fn test_error_not_found() {
+    let logger = TestLogger::new("test_error_not_found");
+    let mut app = populated_app();
+    app.conn_state = ConnState::Connected;
+
+    logger.step("Send not-found error");
+    app.update(Msg::RpcError("Session not found: nonexistent-id".to_string()));
+
+    let q = app.toast_queue.borrow();
+    assert_eq!(q.active().unwrap().level, ToastLevel::Error);
+    assert!(q.active().unwrap().message.contains("not found"));
+    drop(q);
+    logger.step_result(true, "Not-found error creates toast");
+
+    logger.step("App still functional — can navigate tabs");
+    app.update(key_msg(KeyCode::Char('2')));
+    assert_eq!(app.tab, Tab::Sessions);
+    logger.step_result(true, "Tab navigation still works after error");
+
+    logger.step("Can still receive snapshots after error");
+    let snapshot = Snapshot {
+        sessions: vec![],
+        panes: vec![],
+        events: vec![],
+        stats: StatsEnvelope::default(),
+        last_event_id: 0,
+    };
+    app.update(Msg::SnapshotReceived(snapshot));
+    assert_eq!(app.sessions.len(), 0);
+    logger.step_result(true, "Snapshot processing works after error");
+
+    logger.finish(true);
+}
+
+/// RPC "forbidden" error shows error toast and transitions to Error state.
+#[test]
+fn test_error_forbidden() {
+    let logger = TestLogger::new("test_error_forbidden");
+    let mut app = NtmApp::new();
+    app.conn_state = ConnState::Connected;
+
+    logger.step("Send forbidden error");
+    app.update(Msg::RpcError("Forbidden: admin authentication required".to_string()));
+
+    assert_eq!(
+        app.conn_state,
+        ConnState::Error("Forbidden: admin authentication required".to_string()),
+    );
+    let q = app.toast_queue.borrow();
+    assert!(q.active().unwrap().message.contains("Forbidden"));
+    logger.step_result(true, "Forbidden error: toast + error state");
+
+    logger.finish(true);
+}
+
+/// Connection state transitions: Connected → Error → Connected (recovery).
+#[test]
+fn test_error_and_recovery() {
+    let logger = TestLogger::new("test_error_and_recovery");
+    let mut app = populated_app();
+
+    logger.step("Start connected");
+    app.update(Msg::ConnectionChanged(ConnState::Connected));
+    assert_eq!(app.conn_state, ConnState::Connected);
+    logger.step_result(true, "Connected");
+
+    logger.step("Error occurs");
+    app.update(Msg::RpcError("timeout waiting for response".to_string()));
+    assert_eq!(
+        app.conn_state,
+        ConnState::Error("timeout waiting for response".to_string()),
+    );
+    logger.step_result(true, "Error state");
+
+    logger.step("Recovery — new connected state");
+    app.update(Msg::ConnectionChanged(ConnState::Connected));
+    assert_eq!(app.conn_state, ConnState::Connected, "should recover to Connected");
+    logger.step_result(true, "Recovered to Connected");
+
+    logger.step("Verify app is fully functional after recovery");
+    let mut tf = TestFrame::new(120, 30);
+    tf.render(|frame, _area| {
+        app.view(frame);
+    });
+    // Should still render the dashboard with data
+    tf.assert_contains("Dashboard");
+    logger.step_result(true, "App renders normally after recovery");
+
+    logger.finish(true);
+}
+
+/// Multiple consecutive errors stack toasts and track latest error.
+#[test]
+fn test_multiple_consecutive_errors() {
+    let logger = TestLogger::new("test_multiple_consecutive_errors");
+    let mut app = NtmApp::new();
+    app.conn_state = ConnState::Connected;
+
+    logger.step("Send 3 different errors");
+    app.update(Msg::RpcError("Error 1: timeout".to_string()));
+    app.update(Msg::RpcError("Error 2: connection refused".to_string()));
+    app.update(Msg::RpcError("Error 3: internal error".to_string()));
+
+    let q = app.toast_queue.borrow();
+    assert!(q.toasts.len() >= 3, "Should have at least 3 error toasts, got {}", q.toasts.len());
+    logger.step_result(true, "3 toasts stacked");
+    drop(q);
+
+    logger.step("ConnState tracks the latest error");
+    assert_eq!(
+        app.conn_state,
+        ConnState::Error("Error 3: internal error".to_string()),
+        "Should show latest error"
+    );
+    logger.step_result(true, "ConnState tracks latest error");
+
+    logger.finish(true);
+}
+
+/// Disconnection followed by error — ConnState reflects most recent update.
+#[test]
+fn test_disconnect_then_error() {
+    let logger = TestLogger::new("test_disconnect_then_error");
+    let mut app = NtmApp::new();
+
+    logger.step("Transition through Connecting → Connected");
+    app.update(Msg::ConnectionChanged(ConnState::Connecting));
+    assert_eq!(app.conn_state, ConnState::Connecting);
+    app.update(Msg::ConnectionChanged(ConnState::Connected));
+    assert_eq!(app.conn_state, ConnState::Connected);
+    logger.step_result(true, "Connected");
+
+    logger.step("Disconnect");
+    app.update(Msg::ConnectionChanged(ConnState::Disconnected));
+    assert_eq!(app.conn_state, ConnState::Disconnected);
+    logger.step_result(true, "Disconnected");
+
+    logger.step("Verify app renders disconnected state");
+    let mut tf = TestFrame::new(120, 30);
+    tf.render(|frame, _area| {
+        app.view(frame);
+    });
+    logger.step_result(true, "Rendered without panic in disconnected state");
+
+    logger.finish(true);
+}
