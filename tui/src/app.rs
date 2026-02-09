@@ -1865,4 +1865,135 @@ mod tests {
         app.update(Msg::Term(Event::Paste(paste)));
         assert!(app.send_input_buf.is_empty());
     }
+
+    // ========================================================
+    // fire_rpc with real channels — JSON-RPC notification tests
+    // ========================================================
+
+    #[test]
+    fn test_fire_rpc_sends_valid_json_rpc_notification() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+        let mut app = NtmApp::new();
+        app.set_rpc_tx(tx);
+        app.fire_rpc("actions.paneSend", json!({"paneId": "%0", "payload": "ls"}));
+        let msg = rx.try_recv().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&msg).unwrap();
+        assert_eq!(parsed["jsonrpc"], "2.0");
+        assert_eq!(parsed["method"], "actions.paneSend");
+        assert_eq!(parsed["params"]["paneId"], "%0");
+        assert_eq!(parsed["params"]["payload"], "ls");
+        // Notification: no "id" field
+        assert!(parsed.get("id").is_none());
+    }
+
+    #[test]
+    fn test_fire_rpc_session_kill_format() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+        let mut app = NtmApp::new();
+        app.set_rpc_tx(tx);
+        app.fire_rpc("actions.sessionKill", json!({"sessionId": "sess-abc"}));
+        let msg = rx.try_recv().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&msg).unwrap();
+        assert_eq!(parsed["jsonrpc"], "2.0");
+        assert_eq!(parsed["method"], "actions.sessionKill");
+        assert_eq!(parsed["params"]["sessionId"], "sess-abc");
+        assert!(parsed.get("id").is_none());
+    }
+
+    #[test]
+    fn test_fire_rpc_with_null_params() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+        let mut app = NtmApp::new();
+        app.set_rpc_tx(tx);
+        app.fire_rpc("test.null", serde_json::Value::Null);
+        let msg = rx.try_recv().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&msg).unwrap();
+        assert_eq!(parsed["jsonrpc"], "2.0");
+        assert_eq!(parsed["method"], "test.null");
+        assert!(parsed["params"].is_null());
+    }
+
+    #[test]
+    fn test_fire_rpc_with_nested_params() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+        let mut app = NtmApp::new();
+        app.set_rpc_tx(tx);
+        app.fire_rpc("test.nested", json!({
+            "outer": {"inner": [1, 2, 3]},
+            "flag": true
+        }));
+        let msg = rx.try_recv().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&msg).unwrap();
+        assert_eq!(parsed["params"]["outer"]["inner"][1], 2);
+        assert_eq!(parsed["params"]["flag"], true);
+    }
+
+    #[test]
+    fn test_fire_rpc_closed_channel_no_panic() {
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        let mut app = NtmApp::new();
+        app.set_rpc_tx(tx);
+        drop(rx); // close the receiver end
+        // Should not panic — logs warning and returns
+        app.fire_rpc("test.closed", json!({}));
+    }
+
+    #[test]
+    fn test_kill_confirm_sends_rpc_via_channel() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+        let mut app = populated_app();
+        app.set_rpc_tx(tx);
+        app.pending_confirm = Some(ConfirmAction::KillSession {
+            session_id: "sess-xyz".to_string(),
+            session_name: "my-project".to_string(),
+        });
+        app.handle_key(key(KeyCode::Char('y')));
+        // Verify RPC was sent
+        let msg = rx.try_recv().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&msg).unwrap();
+        assert_eq!(parsed["method"], "actions.sessionKill");
+        assert_eq!(parsed["params"]["sessionId"], "sess-xyz");
+        // Also verify toast was shown
+        assert!(!app.toast_queue.borrow().is_empty());
+    }
+
+    #[test]
+    fn test_pane_send_enter_sends_rpc_via_channel() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+        let mut app = populated_app();
+        app.set_rpc_tx(tx);
+        app.send_input_buf = "echo hello".to_string();
+        app.pending_confirm = Some(ConfirmAction::PaneSend {
+            pane_id: "%5".to_string(),
+            pane_label: "work #2".to_string(),
+        });
+        app.handle_key(key(KeyCode::Enter));
+        // Verify RPC was sent
+        let msg = rx.try_recv().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&msg).unwrap();
+        assert_eq!(parsed["method"], "actions.paneSend");
+        assert_eq!(parsed["params"]["paneId"], "%5");
+        assert_eq!(parsed["params"]["payload"], "echo hello");
+        assert_eq!(parsed["params"]["enter"], true);
+        // Verify buf cleared and toast shown
+        assert!(app.send_input_buf.is_empty());
+        assert!(!app.toast_queue.borrow().is_empty());
+    }
+
+    #[test]
+    fn test_fire_rpc_multiple_calls_queued() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+        let mut app = NtmApp::new();
+        app.set_rpc_tx(tx);
+        app.fire_rpc("method.one", json!({"a": 1}));
+        app.fire_rpc("method.two", json!({"b": 2}));
+        app.fire_rpc("method.three", json!({"c": 3}));
+        // All three should be in the channel
+        let msg1: serde_json::Value = serde_json::from_str(&rx.try_recv().unwrap()).unwrap();
+        let msg2: serde_json::Value = serde_json::from_str(&rx.try_recv().unwrap()).unwrap();
+        let msg3: serde_json::Value = serde_json::from_str(&rx.try_recv().unwrap()).unwrap();
+        assert_eq!(msg1["method"], "method.one");
+        assert_eq!(msg2["method"], "method.two");
+        assert_eq!(msg3["method"], "method.three");
+    }
 }
