@@ -525,3 +525,308 @@ fn concurrent_valid_and_invalid_requests() {
     assert_eq!(successes, 5);
     assert_eq!(errors, 5);
 }
+
+// ============================================================================
+// Large Dataset Performance Tests (bd-jxa7)
+// ============================================================================
+
+fn populate_large_dataset(cache: &Cache, num_sessions: usize, panes_per_session: usize, num_events: usize) {
+    let now = 1_700_000_000_i64;
+    for s in 0..num_sessions {
+        let mut session = Session::new(
+            "ntm",
+            format!("session-{s}"),
+            Some(format!("${s}")),
+            now + s as i64,
+        );
+        session.status = if s % 3 == 0 {
+            SessionStatus::Idle
+        } else {
+            SessionStatus::Active
+        };
+        session.pane_count = panes_per_session as u32;
+        let session_uid = session.session_uid.clone();
+        cache.upsert_session(session);
+
+        for p in 0..panes_per_session {
+            let mut pane = Pane::new(
+                &session_uid,
+                p as i32,
+                now + p as i64,
+                Some(format!("%{}", s * 100 + p)),
+                None,
+                None,
+            );
+            pane.status = if p % 2 == 0 {
+                PaneStatus::Active
+            } else {
+                PaneStatus::Waiting
+            };
+            pane.current_command = Some(format!("cmd-{p}"));
+            cache.upsert_pane(pane);
+        }
+    }
+
+    for e in 0..num_events {
+        cache.record_event(EventRecord {
+            event_id: Some(e as i64),
+            session_uid: format!("session-uid-{}", e % num_sessions),
+            pane_uid: format!("pane-uid-{e}"),
+            event_type: if e % 2 == 0 { "compact" } else { "escalation" }.to_string(),
+            detected_at: now + e as i64,
+            severity: Some("info".to_string()),
+            status: Some("pending".to_string()),
+        });
+    }
+
+    cache.set_health(HealthStatus {
+        status: "ok".to_string(),
+        last_error: None,
+    });
+
+    cache.set_stats_today(StatsAggregate {
+        total_compacts: num_events as u64 / 2,
+        active_minutes: 500,
+        estimated_tokens: 250_000,
+    });
+}
+
+#[test]
+fn large_dataset_100_sessions_snapshot() {
+    let cache = Arc::new(Cache::new(2000));
+    populate_large_dataset(&cache, 100, 5, 500);
+    let config = ConfigManager::default();
+    let ctx = RpcContext::new(cache, config);
+
+    let start = std::time::Instant::now();
+    let result = handle("snapshot.get", json!(null), &ctx).unwrap();
+    let elapsed = start.elapsed();
+
+    let sessions = result["sessions"].as_array().unwrap();
+    assert_eq!(sessions.len(), 100);
+
+    let panes = result["panes"].as_array().unwrap();
+    assert_eq!(panes.len(), 500); // 100 sessions * 5 panes
+
+    assert!(
+        elapsed.as_millis() < 1000,
+        "snapshot should complete within 1s, took {}ms",
+        elapsed.as_millis()
+    );
+}
+
+#[test]
+fn large_dataset_events_list_all() {
+    let cache = Arc::new(Cache::new(2000));
+    populate_large_dataset(&cache, 10, 2, 1000);
+    let config = ConfigManager::default();
+    let ctx = RpcContext::new(cache, config);
+
+    let start = std::time::Instant::now();
+    let result = handle("events.list", json!(null), &ctx).unwrap();
+    let elapsed = start.elapsed();
+
+    let events = result["events"].as_array().unwrap();
+    // Ring buffer is capped at cache capacity (2000), all 1000 fit
+    assert_eq!(events.len(), 1000);
+
+    assert!(
+        elapsed.as_millis() < 1000,
+        "events.list should complete within 1s, took {}ms",
+        elapsed.as_millis()
+    );
+}
+
+#[test]
+fn large_dataset_sessions_filter_by_status() {
+    let cache = Arc::new(Cache::new(2000));
+    populate_large_dataset(&cache, 100, 2, 100);
+    let config = ConfigManager::default();
+    let ctx = RpcContext::new(cache, config);
+
+    // Filter for idle sessions (every 3rd session: 0, 3, 6, ... = 34 idle sessions)
+    let result = handle("sessions.list", json!({"status": "idle"}), &ctx).unwrap();
+    let idle_sessions = result["sessions"].as_array().unwrap();
+    assert_eq!(idle_sessions.len(), 34, "sessions 0,3,6,...,99 are idle");
+
+    // Filter for active sessions
+    let result = handle("sessions.list", json!({"status": "active"}), &ctx).unwrap();
+    let active_sessions = result["sessions"].as_array().unwrap();
+    assert_eq!(active_sessions.len(), 66, "remaining 66 sessions are active");
+}
+
+#[test]
+fn large_dataset_stats_summary_correct() {
+    let cache = Arc::new(Cache::new(2000));
+    populate_large_dataset(&cache, 50, 10, 200);
+    let config = ConfigManager::default();
+    let ctx = RpcContext::new(cache, config);
+
+    let result = handle("stats.summary", json!(null), &ctx).unwrap();
+    let summary = &result["summary"];
+    assert_eq!(summary["totalCompacts"], 100); // 200 events / 2
+    assert_eq!(summary["activeMinutes"], 500);
+    assert_eq!(summary["estimatedTokens"], 250_000);
+}
+
+#[test]
+fn large_dataset_snapshot_json_size() {
+    let cache = Arc::new(Cache::new(2000));
+    populate_large_dataset(&cache, 100, 5, 500);
+    let config = ConfigManager::default();
+    let ctx = RpcContext::new(cache, config);
+
+    let result = handle("snapshot.get", json!(null), &ctx).unwrap();
+    let json_str = serde_json::to_string(&result).unwrap();
+    let size_kb = json_str.len() / 1024;
+
+    // Verify it's reasonable (should be under 1MB for this dataset)
+    assert!(
+        size_kb < 1024,
+        "snapshot JSON should be under 1MB, got {}KB",
+        size_kb
+    );
+    // But not empty
+    assert!(size_kb > 10, "snapshot should have real data, got {}KB", size_kb);
+}
+
+#[test]
+fn large_dataset_concurrent_operations() {
+    let cache = Arc::new(Cache::new(2000));
+    populate_large_dataset(&cache, 50, 5, 500);
+    let config = ConfigManager::default();
+    let ctx = Arc::new(RpcContext::new(cache, config));
+
+    let methods = vec![
+        "snapshot.get",
+        "sessions.list",
+        "events.list",
+        "stats.summary",
+        "health.get",
+    ];
+
+    let start = std::time::Instant::now();
+    let handles: Vec<_> = methods
+        .into_iter()
+        .map(|m| {
+            let ctx = ctx.clone();
+            let method = m.to_string();
+            std::thread::spawn(move || handle(&method, json!(null), &ctx))
+        })
+        .collect();
+
+    let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+    let elapsed = start.elapsed();
+
+    for r in &results {
+        assert!(r.is_ok());
+    }
+
+    assert!(
+        elapsed.as_millis() < 1000,
+        "5 concurrent ops on large dataset should complete in 1s, took {}ms",
+        elapsed.as_millis()
+    );
+}
+
+// ============================================================================
+// Admin Authentication Flow Tests (bd-13ar)
+// ============================================================================
+
+#[test]
+fn admin_config_get_shows_all_sections() {
+    let ctx = test_context();
+    let result = handle("config.get", json!(null), &ctx).unwrap();
+    // config.get works without admin
+    assert!(result.is_object());
+}
+
+#[test]
+fn admin_config_set_rejected_without_auth() {
+    let ctx = test_context();
+    let result = handle("config.set", json!({"polling": {"snapshot_interval_ms": 1000}}), &ctx);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code, "FORBIDDEN");
+}
+
+#[test]
+fn admin_config_set_accepted_with_auth() {
+    let mut ctx = test_context();
+    ctx.is_admin = true;
+    let result = handle("config.set", json!({"polling": {"snapshot_interval_ms": 1000}}), &ctx);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn admin_config_reload_rejected_without_auth() {
+    let ctx = test_context();
+    let result = handle("config.reload", json!(null), &ctx);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code, "FORBIDDEN");
+}
+
+#[test]
+fn admin_config_reload_accepted_with_auth() {
+    let mut ctx = test_context();
+    ctx.is_admin = true;
+    let result = handle("config.reload", json!(null), &ctx);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn admin_detectors_reload_rejected_without_auth() {
+    let ctx = test_context();
+    let result = handle("detectors.reload", json!(null), &ctx);
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code, "FORBIDDEN");
+}
+
+#[test]
+fn admin_detectors_list_works_without_auth() {
+    let ctx = test_context();
+    let result = handle("detectors.list", json!(null), &ctx);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn admin_all_protected_methods_require_auth() {
+    let ctx = test_context();
+    let admin_methods = vec![
+        ("config.set", json!({"key": "val"})),
+        ("config.reload", json!(null)),
+        ("detectors.reload", json!(null)),
+    ];
+
+    for (method, params) in admin_methods {
+        let result = handle(method, params, &ctx);
+        assert!(
+            result.is_err(),
+            "{method} should require admin auth"
+        );
+        assert_eq!(
+            result.unwrap_err().code,
+            "FORBIDDEN",
+            "{method} should return FORBIDDEN"
+        );
+    }
+}
+
+#[test]
+fn admin_all_protected_methods_succeed_with_auth() {
+    let mut ctx = test_context();
+    ctx.is_admin = true;
+    let admin_methods = vec![
+        ("config.set", json!({"key": "val"})),
+        ("config.reload", json!(null)),
+        ("detectors.reload", json!(null)),
+    ];
+
+    for (method, params) in admin_methods {
+        let result = handle(method, params, &ctx);
+        assert!(
+            result.is_ok(),
+            "{method} should succeed with admin auth, got: {:?}",
+            result.unwrap_err()
+        );
+    }
+}
