@@ -830,3 +830,97 @@ fn admin_all_protected_methods_succeed_with_auth() {
         );
     }
 }
+
+// ============================================================================
+// Collector Failure and Recovery Tests (bd-2wun)
+// ============================================================================
+
+#[test]
+fn rpc_works_with_degraded_health() {
+    let ctx = test_context_with_data();
+    // Simulate degraded health (as if collector failed)
+    ctx.cache.set_health(HealthStatus {
+        status: "degraded".to_string(),
+        last_error: Some("tmux: command not found".to_string()),
+    });
+
+    // All RPC methods should still work
+    let health = handle("health.get", json!(null), &ctx).unwrap();
+    assert_eq!(health["status"], "degraded");
+    assert_eq!(health["lastError"], "tmux: command not found");
+
+    let sessions = handle("sessions.list", json!(null), &ctx).unwrap();
+    assert!(sessions["sessions"].as_array().unwrap().len() > 0, "stale data should still be served");
+
+    let snapshot = handle("snapshot.get", json!(null), &ctx).unwrap();
+    assert!(snapshot["sessions"].is_array());
+    assert!(snapshot["panes"].is_array());
+
+    let stats = handle("stats.summary", json!(null), &ctx).unwrap();
+    assert!(stats["summary"].is_object());
+}
+
+#[test]
+fn health_reflects_recovery() {
+    let ctx = test_context();
+
+    // Start degraded
+    ctx.cache.set_health(HealthStatus {
+        status: "degraded".to_string(),
+        last_error: Some("connection timeout".to_string()),
+    });
+    let h1 = handle("health.get", json!(null), &ctx).unwrap();
+    assert_eq!(h1["status"], "degraded");
+
+    // Recover
+    ctx.cache.set_health(HealthStatus {
+        status: "ok".to_string(),
+        last_error: None,
+    });
+    let h2 = handle("health.get", json!(null), &ctx).unwrap();
+    assert_eq!(h2["status"], "ok");
+    assert!(h2["lastError"].is_null() || h2.get("lastError").is_none());
+}
+
+#[test]
+fn snapshot_serves_stale_data_during_failure() {
+    let ctx = test_context_with_data();
+    // Mark as degraded
+    ctx.cache.set_health(HealthStatus {
+        status: "degraded".to_string(),
+        last_error: Some("ntm: unavailable".to_string()),
+    });
+
+    // Snapshot should still return the previously-cached data
+    let snapshot = handle("snapshot.get", json!(null), &ctx).unwrap();
+    let sessions = snapshot["sessions"].as_array().unwrap();
+    assert_eq!(sessions.len(), 1, "stale session data should persist");
+    let panes = snapshot["panes"].as_array().unwrap();
+    assert_eq!(panes.len(), 2, "stale pane data should persist");
+}
+
+#[test]
+fn events_list_works_during_degraded() {
+    let ctx = test_context_with_data();
+    ctx.cache.set_health(HealthStatus {
+        status: "degraded".to_string(),
+        last_error: Some("tmux timeout".to_string()),
+    });
+
+    let events = handle("events.list", json!(null), &ctx).unwrap();
+    let ev_array = events["events"].as_array().unwrap();
+    assert_eq!(ev_array.len(), 1, "events should still be accessible");
+}
+
+#[test]
+fn capabilities_get_during_degraded() {
+    let ctx = test_context();
+    ctx.cache.set_health(HealthStatus {
+        status: "degraded".to_string(),
+        last_error: Some("all collectors down".to_string()),
+    });
+
+    let caps = handle("capabilities.get", json!(null), &ctx).unwrap();
+    assert_eq!(caps["protocolVersion"], 1);
+    assert!(caps["capabilities"].is_object());
+}
