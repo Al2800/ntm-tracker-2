@@ -359,4 +359,127 @@ mod tests {
         assert_eq!(sv.source_id, "tmux");
         assert_eq!(sv.last_seen_at, 100);
     }
+
+    // --- EscalationView tests ---
+
+    #[test]
+    fn test_escalation_view_deserialize_full() {
+        let json = r#"{
+            "id": 42,
+            "sessionId": "sess-1",
+            "paneId": "pane-0",
+            "detectedAt": 1700000000,
+            "status": "pending"
+        }"#;
+        let ev: EscalationView = serde_json::from_str(json).unwrap();
+        assert_eq!(ev.id, 42);
+        assert_eq!(ev.session_id, "sess-1");
+        assert_eq!(ev.pane_id, "pane-0");
+        assert_eq!(ev.detected_at, 1700000000);
+        assert_eq!(ev.status, Some("pending".to_string()));
+    }
+
+    #[test]
+    fn test_escalation_view_minimal() {
+        let json = r#"{}"#;
+        let ev: EscalationView = serde_json::from_str(json).unwrap();
+        assert_eq!(ev.id, 0);
+        assert_eq!(ev.session_id, "");
+        assert_eq!(ev.pane_id, "");
+        assert_eq!(ev.detected_at, 0);
+        assert_eq!(ev.status, None);
+    }
+
+    #[test]
+    fn test_escalation_view_with_null_status() {
+        let json = r#"{"id": 7, "sessionId": "s1", "paneId": "p1", "detectedAt": 100, "status": null}"#;
+        let ev: EscalationView = serde_json::from_str(json).unwrap();
+        assert_eq!(ev.id, 7);
+        assert_eq!(ev.status, None);
+    }
+
+    // --- HealthData tests ---
+
+    #[test]
+    fn test_health_data_deserialize_full() {
+        let json = r#"{
+            "status": "healthy",
+            "uptime": 3600,
+            "version": "0.5.0",
+            "instanceId": "inst-abc123",
+            "runId": "run-xyz789",
+            "schemaVersion": "1.0",
+            "protocolVersion": "2.0",
+            "lastError": "connection timeout",
+            "lastEventId": 42
+        }"#;
+        let h: HealthData = serde_json::from_str(json).unwrap();
+        assert_eq!(h.status, "healthy");
+        assert_eq!(h.uptime, 3600);
+        assert_eq!(h.version, "0.5.0");
+        assert_eq!(h.instance_id, "inst-abc123");
+        assert_eq!(h.run_id, "run-xyz789");
+        assert_eq!(h.schema_version, "1.0");
+        assert_eq!(h.protocol_version, "2.0");
+        assert_eq!(h.last_error, Some("connection timeout".to_string()));
+        assert_eq!(h.last_event_id, 42);
+    }
+
+    #[test]
+    fn test_health_data_minimal() {
+        let json = r#"{}"#;
+        let h: HealthData = serde_json::from_str(json).unwrap();
+        assert_eq!(h.status, "");
+        assert_eq!(h.uptime, 0);
+        assert_eq!(h.version, "");
+        assert_eq!(h.instance_id, "");
+        assert_eq!(h.run_id, "");
+        assert_eq!(h.schema_version, "");
+        assert_eq!(h.protocol_version, "");
+        assert_eq!(h.last_error, None);
+        assert_eq!(h.last_event_id, 0);
+    }
+
+    #[test]
+    fn test_health_data_no_error() {
+        let json = r#"{"status": "healthy", "uptime": 100, "version": "1.0"}"#;
+        let h: HealthData = serde_json::from_str(json).unwrap();
+        assert_eq!(h.status, "healthy");
+        assert_eq!(h.last_error, None);
+    }
+
+    // --- StatsEnvelope tests ---
+
+    #[test]
+    fn test_stats_envelope_with_hourly_daily() {
+        let json = r#"{
+            "summary": {"sessions": 2, "panes": 5, "totalCompacts": 3, "activeMinutes": 60, "estimatedTokens": 10000},
+            "hourly": [{"hour": "2024-01-01T00:00:00Z", "tokens": 500}],
+            "daily": [{"date": "2024-01-01", "sessions": 2}, {"date": "2024-01-02", "sessions": 3}]
+        }"#;
+        let se: StatsEnvelope = serde_json::from_str(json).unwrap();
+        assert_eq!(se.summary.sessions, 2);
+        assert_eq!(se.summary.panes, 5);
+        assert_eq!(se.summary.total_compacts, 3);
+        assert_eq!(se.hourly.len(), 1);
+        assert_eq!(se.daily.len(), 2);
+    }
+
+    #[test]
+    fn test_stats_envelope_empty_arrays() {
+        let json = r#"{"summary": {}, "hourly": [], "daily": []}"#;
+        let se: StatsEnvelope = serde_json::from_str(json).unwrap();
+        assert_eq!(se.summary.sessions, 0);
+        assert!(se.hourly.is_empty());
+        assert!(se.daily.is_empty());
+    }
+
+    #[test]
+    fn test_stats_envelope_minimal() {
+        let json = r#"{}"#;
+        let se: StatsEnvelope = serde_json::from_str(json).unwrap();
+        assert_eq!(se.summary.sessions, 0);
+        assert!(se.hourly.is_empty());
+        assert!(se.daily.is_empty());
+    }
 }
