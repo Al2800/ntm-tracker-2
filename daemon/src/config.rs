@@ -562,4 +562,243 @@ capture-output = true
         let err = config.validate().expect_err("validation error");
         assert!(err.message.contains("Invalid redaction regex"));
     }
+
+    // --- Default values for all config sections ---
+
+    #[test]
+    fn server_config_defaults() {
+        let config = ServerConfig::default();
+        assert_eq!(config.bind, "127.0.0.1:3847");
+    }
+
+    #[test]
+    fn polling_config_defaults() {
+        let config = PollingConfig::default();
+        assert_eq!(config.snapshot_interval_ms, 2_000);
+        assert_eq!(config.snapshot_idle_interval_ms, 5_000);
+        assert_eq!(config.snapshot_background_interval_ms, 15_000);
+        assert_eq!(config.snapshot_degraded_interval_ms, 10_000);
+        assert_eq!(config.idle_threshold_secs, 300);
+    }
+
+    #[test]
+    fn logging_config_defaults() {
+        let config = LoggingConfig::default();
+        assert_eq!(config.level, "info");
+        assert!(config.file.is_none());
+        assert_eq!(config.max_file_mb, 10);
+        assert_eq!(config.max_files, 5);
+        assert_eq!(config.format, "text");
+    }
+
+    #[test]
+    fn maintenance_config_defaults() {
+        let config = MaintenanceConfig::default();
+        assert_eq!(config.rollup_interval_ms, 3_600_000);
+        assert_eq!(config.vacuum_interval_hours, 168);
+        assert_eq!(config.minute_samples_retention_hours, 72);
+        assert_eq!(config.events_retention_days, 30);
+        assert_eq!(config.sessions_retention_days, 90);
+        assert_eq!(config.max_db_mb, 512);
+    }
+
+    #[test]
+    fn capture_config_defaults() {
+        let config = CaptureConfig::default();
+        assert!(!config.capture_output);
+    }
+
+    #[test]
+    fn security_config_defaults() {
+        let config = SecurityConfig::default();
+        assert!(config.admin_token_path.is_none());
+    }
+
+    #[test]
+    fn privacy_config_defaults() {
+        let config = PrivacyConfig::default();
+        assert!(config.redaction_patterns.is_empty());
+    }
+
+    // --- TOML parsing tests ---
+
+    #[test]
+    fn empty_toml_uses_all_defaults() {
+        let config = DaemonConfig::from_toml_str("").unwrap();
+        config.validate().unwrap();
+        assert_eq!(config.server.bind, "127.0.0.1:3847");
+        assert_eq!(config.polling.snapshot_interval_ms, 2_000);
+    }
+
+    #[test]
+    fn full_toml_parse() {
+        let config = DaemonConfig::from_toml_str(
+            r#"
+[server]
+bind = "0.0.0.0:8080"
+
+[polling]
+snapshot-interval-ms = 1000
+snapshot-idle-interval-ms = 3000
+snapshot-background-interval-ms = 10000
+snapshot-degraded-interval-ms = 5000
+idle-threshold-secs = 120
+
+[capture]
+capture-output = true
+
+[logging]
+level = "debug"
+format = "json"
+max-file-mb = 50
+max-files = 10
+
+[maintenance]
+rollup-interval-ms = 120000
+vacuum-interval-hours = 24
+events-retention-days = 7
+sessions-retention-days = 30
+max-db-mb = 256
+"#,
+        )
+        .unwrap();
+        assert_eq!(config.server.bind, "0.0.0.0:8080");
+        assert_eq!(config.polling.snapshot_interval_ms, 1000);
+        assert_eq!(config.polling.idle_threshold_secs, 120);
+        assert!(config.capture.capture_output);
+        assert_eq!(config.logging.level, "debug");
+        assert_eq!(config.logging.format, "json");
+        assert_eq!(config.maintenance.events_retention_days, 7);
+    }
+
+    #[test]
+    fn invalid_toml_returns_error() {
+        let result = DaemonConfig::from_toml_str("not valid {{toml");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().message.contains("TOML parse error"));
+    }
+
+    // --- Validation boundary tests ---
+
+    #[test]
+    fn validation_snapshot_interval_too_low() {
+        let mut config = DaemonConfig::default();
+        config.polling.snapshot_interval_ms = 100;
+        let err = config.validate().unwrap_err();
+        assert!(err.message.contains("snapshot-interval-ms must be >= 250"));
+    }
+
+    #[test]
+    fn validation_snapshot_interval_too_high() {
+        let mut config = DaemonConfig::default();
+        config.polling.snapshot_interval_ms = 100_000;
+        let err = config.validate().unwrap_err();
+        assert!(err.message.contains("snapshot-interval-ms must be <= 60000"));
+    }
+
+    #[test]
+    fn validation_idle_less_than_snapshot() {
+        let mut config = DaemonConfig::default();
+        config.polling.snapshot_interval_ms = 5000;
+        config.polling.snapshot_idle_interval_ms = 3000;
+        let err = config.validate().unwrap_err();
+        assert!(err.message.contains("idle-interval-ms must be >= snapshot-interval-ms"));
+    }
+
+    #[test]
+    fn validation_idle_threshold_too_low() {
+        let mut config = DaemonConfig::default();
+        config.polling.idle_threshold_secs = 10;
+        let err = config.validate().unwrap_err();
+        assert!(err.message.contains("idle-threshold-secs must be >= 30"));
+    }
+
+    #[test]
+    fn validation_idle_threshold_too_high() {
+        let mut config = DaemonConfig::default();
+        config.polling.idle_threshold_secs = 10_000;
+        let err = config.validate().unwrap_err();
+        assert!(err.message.contains("idle-threshold-secs must be <= 7200"));
+    }
+
+    #[test]
+    fn validation_logging_format_invalid() {
+        let mut config = DaemonConfig::default();
+        config.logging.format = "yaml".to_string();
+        let err = config.validate().unwrap_err();
+        assert!(err.message.contains("logging.format must be either 'text' or 'json'"));
+    }
+
+    #[test]
+    fn validation_logging_max_files_zero() {
+        let mut config = DaemonConfig::default();
+        config.logging.max_files = 0;
+        let err = config.validate().unwrap_err();
+        assert!(err.message.contains("logging.max-files must be >= 1"));
+    }
+
+    #[test]
+    fn validation_maintenance_rollup_too_low() {
+        let mut config = DaemonConfig::default();
+        config.maintenance.rollup_interval_ms = 1000;
+        let err = config.validate().unwrap_err();
+        assert!(err.message.contains("rollup-interval-ms must be >= 60000"));
+    }
+
+    #[test]
+    fn validation_maintenance_vacuum_zero() {
+        let mut config = DaemonConfig::default();
+        config.maintenance.vacuum_interval_hours = 0;
+        let err = config.validate().unwrap_err();
+        assert!(err.message.contains("vacuum-interval-hours must be >= 1"));
+    }
+
+    #[test]
+    fn validation_maintenance_events_retention_zero() {
+        let mut config = DaemonConfig::default();
+        config.maintenance.events_retention_days = 0;
+        let err = config.validate().unwrap_err();
+        assert!(err.message.contains("events-retention-days must be >= 1"));
+    }
+
+    #[test]
+    fn validation_maintenance_sessions_retention_zero() {
+        let mut config = DaemonConfig::default();
+        config.maintenance.sessions_retention_days = 0;
+        let err = config.validate().unwrap_err();
+        assert!(err.message.contains("sessions-retention-days must be >= 1"));
+    }
+
+    #[test]
+    fn validation_valid_redaction_patterns() {
+        let mut config = DaemonConfig::default();
+        config.privacy.redaction_patterns = vec![
+            r"\d{3}-\d{2}-\d{4}".to_string(),
+            r"sk-[a-zA-Z0-9]+".to_string(),
+        ];
+        config.validate().unwrap();
+    }
+
+    // --- ConfigManager tests ---
+
+    #[test]
+    fn config_manager_default_returns_defaults() {
+        let mgr = ConfigManager::default();
+        let config = mgr.current();
+        assert_eq!(config.server.bind, "127.0.0.1:3847");
+        assert!(mgr.config_path().is_none());
+    }
+
+    #[test]
+    fn config_manager_reload_without_path() {
+        let mgr = ConfigManager::default();
+        let result = mgr.reload().unwrap();
+        assert_eq!(result.server.bind, "127.0.0.1:3847");
+    }
+
+    #[test]
+    fn config_error_display() {
+        let err = ConfigError::new("test error message");
+        assert_eq!(err.to_string(), "test error message");
+    }
 }
