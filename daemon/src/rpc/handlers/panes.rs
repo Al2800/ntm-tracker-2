@@ -163,6 +163,37 @@ pub fn output_preview(_ctx: &RpcContext, params: Value) -> RpcResult<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cache::Cache;
+    use crate::config::ConfigManager;
+    use crate::models::pane::{Pane as PaneModel, PaneStatus};
+    use crate::rpc::{Capabilities, RpcContext, CODE_NOT_FOUND};
+    use std::sync::Arc;
+
+    fn test_ctx() -> RpcContext {
+        let cache = Arc::new(Cache::new(100));
+        let config = ConfigManager::default();
+        let caps = Capabilities { ntm: false, tmux: false, stream: false, systemd: false };
+        RpcContext::with_capabilities(cache, config, caps)
+    }
+
+    fn make_pane(uid: &str, session_uid: &str) -> PaneModel {
+        PaneModel {
+            pane_uid: uid.to_string(),
+            session_uid: session_uid.to_string(),
+            pane_index: 0,
+            tmux_pane_id: Some("%0".to_string()),
+            tmux_window_id: None,
+            tmux_pane_pid: Some(12345),
+            agent_type: Some("claude".to_string()),
+            created_at: 1000,
+            last_seen_at: 2000,
+            last_activity_at: Some(1500),
+            current_command: Some("python".to_string()),
+            ended_at: None,
+            status: PaneStatus::Active,
+            status_reason: None,
+        }
+    }
 
     #[test]
     fn valid_pane_ids() {
@@ -183,5 +214,46 @@ mod tests {
         assert!(!is_valid_pane_id("foo\nbar"));
         assert!(!is_valid_pane_id("foo bar"));
         assert!(!is_valid_pane_id(&"a".repeat(100)));
+    }
+
+    #[test]
+    fn pane_get_found() {
+        let ctx = test_ctx();
+        ctx.cache.upsert_pane(make_pane("p1", "s1"));
+        let result = get(&ctx, json!({"paneId": "p1"})).unwrap();
+        assert_eq!(result["pane"]["paneId"], "p1");
+        assert_eq!(result["pane"]["sessionId"], "s1");
+        assert_eq!(result["pane"]["status"], "active");
+        assert_eq!(result["pane"]["agentType"], "claude");
+        assert_eq!(result["pane"]["currentCommand"], "python");
+    }
+
+    #[test]
+    fn pane_get_not_found() {
+        let ctx = test_ctx();
+        let result = get(&ctx, json!({"paneId": "nonexistent"}));
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code, CODE_NOT_FOUND);
+    }
+
+    #[test]
+    fn pane_views_returns_all() {
+        let ctx = test_ctx();
+        ctx.cache.upsert_pane(make_pane("p1", "s1"));
+        ctx.cache.upsert_pane(make_pane("p2", "s1"));
+        let views = pane_views(ctx.cache.as_ref());
+        assert_eq!(views.len(), 2);
+    }
+
+    #[test]
+    fn pane_view_from_pane_maps_fields() {
+        let pane = make_pane("p1", "s1");
+        let view = PaneView::from(pane);
+        assert_eq!(view.pane_id, "p1");
+        assert_eq!(view.session_id, "s1");
+        assert_eq!(view.status, "active");
+        assert_eq!(view.tmux_pane_id.as_deref(), Some("%0"));
+        assert_eq!(view.tmux_pane_pid, Some(12345));
+        assert_eq!(view.agent_type.as_deref(), Some("claude"));
     }
 }

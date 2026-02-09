@@ -140,3 +140,145 @@ pub fn escalations_dismiss(_ctx: &RpcContext, params: Value) -> RpcResult<Value>
         ),
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cache::Cache;
+    use crate::config::ConfigManager;
+    use crate::rpc::{Capabilities, RpcContext};
+    use std::sync::Arc;
+
+    fn test_ctx() -> RpcContext {
+        let cache = Arc::new(Cache::new(100));
+        let config = ConfigManager::default();
+        let caps = Capabilities { ntm: false, tmux: false, stream: false, systemd: false };
+        RpcContext::with_capabilities(cache, config, caps)
+    }
+
+    fn test_ctx_with_events() -> RpcContext {
+        let ctx = test_ctx();
+        for i in 1..=5 {
+            ctx.cache.record_event(EventRecord {
+                event_id: Some(i),
+                session_uid: format!("sess-{i}"),
+                pane_uid: format!("pane-{i}"),
+                event_type: if i == 3 { "escalation".to_string() } else { "compact".to_string() },
+                detected_at: 1000 + i,
+                severity: Some("info".to_string()),
+                status: if i == 3 { Some("pending".to_string()) } else { None },
+            });
+        }
+        ctx
+    }
+
+    #[test]
+    fn events_list_empty_cache() {
+        let ctx = test_ctx();
+        let result = list(&ctx, Value::Null).unwrap();
+        assert!(result["events"].as_array().unwrap().is_empty());
+        assert_eq!(result["nextEventId"], 0);
+    }
+
+    #[test]
+    fn events_list_returns_all_events() {
+        let ctx = test_ctx_with_events();
+        let result = list(&ctx, Value::Null).unwrap();
+        let events = result["events"].as_array().unwrap();
+        assert_eq!(events.len(), 5);
+    }
+
+    #[test]
+    fn events_list_with_cursor_filters() {
+        let ctx = test_ctx_with_events();
+        let result = list(&ctx, serde_json::json!({"cursor": 3})).unwrap();
+        let events = result["events"].as_array().unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0]["id"], 4);
+        assert_eq!(events[1]["id"], 5);
+    }
+
+    #[test]
+    fn events_list_with_limit() {
+        let ctx = test_ctx_with_events();
+        let result = list(&ctx, serde_json::json!({"limit": 2})).unwrap();
+        let events = result["events"].as_array().unwrap();
+        assert_eq!(events.len(), 2);
+    }
+
+    #[test]
+    fn events_list_cursor_and_limit_combined() {
+        let ctx = test_ctx_with_events();
+        let result = list(&ctx, serde_json::json!({"cursor": 2, "limit": 1})).unwrap();
+        let events = result["events"].as_array().unwrap();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["id"], 3);
+    }
+
+    #[test]
+    fn events_list_next_event_id() {
+        let ctx = test_ctx_with_events();
+        let result = list(&ctx, Value::Null).unwrap();
+        // Last event id is 5, so nextEventId should be 6
+        assert_eq!(result["nextEventId"], 6);
+    }
+
+    #[test]
+    fn escalations_list_filters_by_type() {
+        let ctx = test_ctx_with_events();
+        let result = escalations_list(&ctx).unwrap();
+        let escalations = result["escalations"].as_array().unwrap();
+        assert_eq!(escalations.len(), 1);
+        assert_eq!(escalations[0]["id"], 3);
+        assert_eq!(escalations[0]["status"], "pending");
+    }
+
+    #[test]
+    fn escalations_list_empty_when_no_escalations() {
+        let ctx = test_ctx();
+        // Add a non-escalation event
+        ctx.cache.record_event(EventRecord {
+            event_id: Some(1),
+            session_uid: "s".to_string(),
+            pane_uid: "p".to_string(),
+            event_type: "compact".to_string(),
+            detected_at: 100,
+            severity: None,
+            status: None,
+        });
+        let result = escalations_list(&ctx).unwrap();
+        assert!(result["escalations"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn escalations_dismiss_returns_unsupported() {
+        let ctx = test_ctx();
+        let result = escalations_dismiss(&ctx, serde_json::json!({"escalationId": 42}));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.code, CODE_UNSUPPORTED);
+    }
+
+    #[test]
+    fn last_event_id_with_events() {
+        let ctx = test_ctx_with_events();
+        assert_eq!(last_event_id(ctx.cache.as_ref()), 5);
+    }
+
+    #[test]
+    fn last_event_id_empty_cache() {
+        let ctx = test_ctx();
+        assert_eq!(last_event_id(ctx.cache.as_ref()), 0);
+    }
+
+    #[test]
+    fn subscribe_returns_channels() {
+        let ctx = test_ctx();
+        let result = subscribe(&ctx, serde_json::json!({
+            "channels": ["sessions", "events"]
+        })).unwrap();
+        assert_eq!(result["subscribed"], true);
+        let channels = result["channels"].as_array().unwrap();
+        assert_eq!(channels.len(), 2);
+    }
+}

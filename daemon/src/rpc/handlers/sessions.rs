@@ -116,3 +116,116 @@ pub fn get(ctx: &RpcContext, params: Value) -> RpcResult<Value> {
         .ok_or_else(|| RpcError::new(CODE_NOT_FOUND, "Session not found"))?;
     Ok(json!({ "session": SessionView::from(session) }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cache::Cache;
+    use crate::config::ConfigManager;
+    use crate::models::pane::{Pane, PaneStatus};
+    use crate::models::session::{Session, SessionStatus};
+    use crate::rpc::{Capabilities, RpcContext};
+    use std::sync::Arc;
+
+    fn test_ctx() -> RpcContext {
+        let cache = Arc::new(Cache::new(100));
+        let config = ConfigManager::default();
+        let caps = Capabilities { ntm: false, tmux: false, stream: false, systemd: false };
+        RpcContext::with_capabilities(cache, config, caps)
+    }
+
+    fn make_session(uid: &str, name: &str, status: SessionStatus) -> Session {
+        Session {
+            session_uid: uid.to_string(),
+            source_id: "tmux".to_string(),
+            tmux_session_id: None,
+            name: name.to_string(),
+            created_at: 1000,
+            last_seen_at: 2000,
+            ended_at: None,
+            status,
+            status_reason: None,
+            pane_count: 0,
+            metadata: None,
+        }
+    }
+
+    fn make_pane(uid: &str, session_uid: &str) -> Pane {
+        Pane {
+            pane_uid: uid.to_string(),
+            session_uid: session_uid.to_string(),
+            pane_index: 0,
+            tmux_pane_id: None, tmux_window_id: None, tmux_pane_pid: None,
+            agent_type: None, created_at: 1, last_seen_at: 1,
+            last_activity_at: None, current_command: None, ended_at: None,
+            status: PaneStatus::Active, status_reason: None,
+        }
+    }
+
+    #[test]
+    fn sessions_list_empty() {
+        let ctx = test_ctx();
+        let result = list(&ctx, Value::Null).unwrap();
+        assert!(result["sessions"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn sessions_list_returns_all() {
+        let ctx = test_ctx();
+        ctx.cache.upsert_session(make_session("s1", "alpha", SessionStatus::Active));
+        ctx.cache.upsert_session(make_session("s2", "beta", SessionStatus::Idle));
+        let result = list(&ctx, Value::Null).unwrap();
+        assert_eq!(result["sessions"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn sessions_list_filter_by_status() {
+        let ctx = test_ctx();
+        ctx.cache.upsert_session(make_session("s1", "alpha", SessionStatus::Active));
+        ctx.cache.upsert_session(make_session("s2", "beta", SessionStatus::Idle));
+        let result = list(&ctx, json!({"status": "active"})).unwrap();
+        let sessions = result["sessions"].as_array().unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0]["status"], "active");
+    }
+
+    #[test]
+    fn sessions_list_filter_by_ids() {
+        let ctx = test_ctx();
+        ctx.cache.upsert_session(make_session("s1", "alpha", SessionStatus::Active));
+        ctx.cache.upsert_session(make_session("s2", "beta", SessionStatus::Active));
+        ctx.cache.upsert_session(make_session("s3", "gamma", SessionStatus::Active));
+        let result = list(&ctx, json!({"sessionIds": ["s1", "s3"]})).unwrap();
+        let sessions = result["sessions"].as_array().unwrap();
+        assert_eq!(sessions.len(), 2);
+    }
+
+    #[test]
+    fn sessions_get_found() {
+        let ctx = test_ctx();
+        ctx.cache.upsert_session(make_session("s1", "alpha", SessionStatus::Active));
+        let result = get(&ctx, json!({"sessionId": "s1"})).unwrap();
+        assert_eq!(result["session"]["sessionId"], "s1");
+        assert_eq!(result["session"]["name"], "alpha");
+        assert_eq!(result["session"]["status"], "active");
+    }
+
+    #[test]
+    fn sessions_get_not_found() {
+        let ctx = test_ctx();
+        let result = get(&ctx, json!({"sessionId": "nonexistent"}));
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code, CODE_NOT_FOUND);
+    }
+
+    #[test]
+    fn session_views_counts_panes() {
+        let ctx = test_ctx();
+        ctx.cache.upsert_session(make_session("s1", "alpha", SessionStatus::Active));
+        ctx.cache.upsert_pane(make_pane("p1", "s1"));
+        ctx.cache.upsert_pane(make_pane("p2", "s1"));
+        let views = session_views(ctx.cache.as_ref());
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].pane_count, 2);
+    }
+}
