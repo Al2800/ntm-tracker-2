@@ -250,4 +250,293 @@ mod tests {
         assert_eq!(changed_again, 0);
         assert_eq!(removed_again, 1);
     }
+
+    // --- Helper ---
+
+    fn make_collector() -> TmuxCollector {
+        let runner = CommandRunner::new(crate::command::CommandConfig::default());
+        let bus = EventBus::new(4);
+        let cache = Arc::new(Cache::new(100));
+        TmuxCollector::new(runner, bus, cache, TmuxCollectorConfig::default())
+    }
+
+    fn make_collector_with_cache(cache: Arc<Cache>) -> TmuxCollector {
+        let runner = CommandRunner::new(crate::command::CommandConfig::default());
+        let bus = EventBus::new(4);
+        TmuxCollector::new(runner, bus, cache, TmuxCollectorConfig::default())
+    }
+
+    fn meta(session_id: &str, pane_id: &str) -> TmuxPaneMeta {
+        TmuxPaneMeta {
+            session_id: session_id.to_string(),
+            session_name: format!("sess-{session_id}"),
+            window_id: "@1".to_string(),
+            pane_id: pane_id.to_string(),
+            pane_index: 0,
+            pane_pid: 100,
+            pane_current_command: "bash".to_string(),
+            pane_last_activity: 1000,
+            pane_dead: false,
+            pane_in_mode: false,
+        }
+    }
+
+    // --- diff_state edge cases ---
+
+    #[test]
+    fn diff_empty_old_empty_new() {
+        let mut c = make_collector();
+        let (changed, removed) = c.diff_state(&[]);
+        assert_eq!(changed, 0);
+        assert_eq!(removed, 0);
+    }
+
+    #[test]
+    fn diff_empty_old_all_new() {
+        let mut c = make_collector();
+        let metas = vec![meta("$1", "%1"), meta("$1", "%2"), meta("$2", "%3")];
+        let (changed, removed) = c.diff_state(&metas);
+        assert_eq!(changed, 3, "all panes are new");
+        assert_eq!(removed, 0);
+    }
+
+    #[test]
+    fn diff_identical_states_no_change() {
+        let mut c = make_collector();
+        let metas = vec![meta("$1", "%1"), meta("$1", "%2")];
+        c.diff_state(&metas);
+        // Same input again — nothing changed
+        let (changed, removed) = c.diff_state(&metas);
+        assert_eq!(changed, 0);
+        assert_eq!(removed, 0);
+    }
+
+    #[test]
+    fn diff_all_removed() {
+        let mut c = make_collector();
+        let metas = vec![meta("$1", "%1"), meta("$2", "%2")];
+        c.diff_state(&metas);
+        let (changed, removed) = c.diff_state(&[]);
+        assert_eq!(changed, 0);
+        assert_eq!(removed, 2);
+    }
+
+    #[test]
+    fn diff_mixed_add_remove_change() {
+        let mut c = make_collector();
+        // Initial: %1, %2
+        let initial = vec![meta("$1", "%1"), meta("$1", "%2")];
+        c.diff_state(&initial);
+
+        // Next: %2 (unchanged), %3 (new), %1 removed
+        let next = vec![meta("$1", "%2"), meta("$1", "%3")];
+        let (changed, removed) = c.diff_state(&next);
+        assert_eq!(changed, 1, "%3 is new");
+        assert_eq!(removed, 1, "%1 was removed");
+    }
+
+    #[test]
+    fn diff_detects_field_change() {
+        let mut c = make_collector();
+        let m = meta("$1", "%1");
+        c.diff_state(std::slice::from_ref(&m));
+
+        // Same pane_id but different command
+        let mut m2 = meta("$1", "%1");
+        m2.pane_current_command = "vim".to_string();
+        let (changed, removed) = c.diff_state(std::slice::from_ref(&m2));
+        assert_eq!(changed, 1, "command changed");
+        assert_eq!(removed, 0);
+    }
+
+    // --- update_cache ---
+
+    #[test]
+    fn update_cache_upserts_sessions_and_panes() {
+        let cache = Arc::new(Cache::new(100));
+        let mut c = make_collector_with_cache(cache.clone());
+        let metas = vec![meta("$1", "%1"), meta("$1", "%2"), meta("$2", "%3")];
+        let (sessions, panes) = c.update_cache(&metas);
+
+        assert_eq!(sessions.len(), 3); // one per meta entry
+        assert_eq!(panes.len(), 3);
+
+        // Cache should have the sessions and panes
+        assert_eq!(cache.session_count(), 2, "2 unique session_ids");
+        assert_eq!(cache.pane_count(), 3);
+    }
+
+    #[test]
+    fn update_cache_sets_source_to_tmux() {
+        let cache = Arc::new(Cache::new(100));
+        let mut c = make_collector_with_cache(cache.clone());
+        let metas = vec![meta("$1", "%1")];
+        let (sessions, _panes) = c.update_cache(&metas);
+        assert_eq!(sessions[0].source_id, "tmux");
+    }
+
+    #[test]
+    fn update_cache_sets_tmux_session_id() {
+        let cache = Arc::new(Cache::new(100));
+        let mut c = make_collector_with_cache(cache.clone());
+        let metas = vec![meta("$1", "%1")];
+        let (sessions, _) = c.update_cache(&metas);
+        assert_eq!(sessions[0].tmux_session_id, Some("$1".to_string()));
+    }
+
+    // --- Session UID stability ---
+
+    #[test]
+    fn session_uid_stable_across_polls() {
+        let cache = Arc::new(Cache::new(100));
+        let mut c = make_collector_with_cache(cache.clone());
+
+        let metas = vec![meta("$1", "%1")];
+        let (sessions1, _) = c.update_cache(&metas);
+        let uid1 = sessions1[0].session_uid.clone();
+
+        // Poll again with same session_id
+        let (sessions2, _) = c.update_cache(&metas);
+        let uid2 = sessions2[0].session_uid.clone();
+
+        assert_eq!(uid1, uid2, "same tmux session_id should produce same UID");
+    }
+
+    #[test]
+    fn different_session_ids_get_different_uids() {
+        let cache = Arc::new(Cache::new(100));
+        let mut c = make_collector_with_cache(cache.clone());
+
+        let metas = vec![meta("$1", "%1"), meta("$2", "%2")];
+        let (sessions, _) = c.update_cache(&metas);
+        assert_ne!(
+            sessions[0].session_uid, sessions[1].session_uid,
+            "different tmux sessions should have different UIDs"
+        );
+    }
+
+    // --- Pane UID stability ---
+
+    #[test]
+    fn pane_uid_stable_across_polls() {
+        let cache = Arc::new(Cache::new(100));
+        let mut c = make_collector_with_cache(cache.clone());
+
+        let metas = vec![meta("$1", "%1")];
+        let (_, panes1) = c.update_cache(&metas);
+        let uid1 = panes1[0].pane_uid.clone();
+
+        let (_, panes2) = c.update_cache(&metas);
+        let uid2 = panes2[0].pane_uid.clone();
+
+        assert_eq!(uid1, uid2, "same tmux pane_id should produce same UID");
+    }
+
+    #[test]
+    fn different_pane_ids_get_different_uids() {
+        let cache = Arc::new(Cache::new(100));
+        let mut c = make_collector_with_cache(cache.clone());
+
+        let metas = vec![meta("$1", "%1"), meta("$1", "%2")];
+        let (_, panes) = c.update_cache(&metas);
+        assert_ne!(
+            panes[0].pane_uid, panes[1].pane_uid,
+            "different tmux panes should have different UIDs"
+        );
+    }
+
+    // --- Dead pane detection ---
+
+    #[test]
+    fn dead_pane_marked_ended() {
+        let cache = Arc::new(Cache::new(100));
+        let mut c = make_collector_with_cache(cache.clone());
+
+        let mut m = meta("$1", "%1");
+        m.pane_dead = true;
+        let (_, panes) = c.update_cache(std::slice::from_ref(&m));
+
+        assert_eq!(panes[0].status, PaneStatus::Ended);
+        assert!(panes[0].ended_at.is_some());
+    }
+
+    #[test]
+    fn alive_pane_active_no_ended() {
+        let cache = Arc::new(Cache::new(100));
+        let mut c = make_collector_with_cache(cache.clone());
+
+        let m = meta("$1", "%1"); // pane_dead = false
+        let (_, panes) = c.update_cache(std::slice::from_ref(&m));
+
+        assert_eq!(panes[0].status, PaneStatus::Active);
+        assert!(panes[0].ended_at.is_none());
+    }
+
+    // --- Pane fields mapping ---
+
+    #[test]
+    fn pane_fields_mapped_correctly() {
+        let cache = Arc::new(Cache::new(100));
+        let mut c = make_collector_with_cache(cache.clone());
+
+        let mut m = meta("$1", "%5");
+        m.window_id = "@3".to_string();
+        m.pane_pid = 9876;
+        m.pane_index = 2;
+        m.pane_current_command = "vim".to_string();
+        m.pane_last_activity = 5000;
+
+        let (_, panes) = c.update_cache(std::slice::from_ref(&m));
+        let p = &panes[0];
+        assert_eq!(p.tmux_pane_id, Some("%5".to_string()));
+        assert_eq!(p.tmux_window_id, Some("@3".to_string()));
+        assert_eq!(p.tmux_pane_pid, Some(9876));
+        assert_eq!(p.pane_index, 2);
+        assert_eq!(p.current_command, Some("vim".to_string()));
+        assert_eq!(p.last_activity_at, Some(5000));
+        assert_eq!(p.status_reason, Some("tmux_poll".to_string()));
+    }
+
+    // --- Zero activity timestamp fallback ---
+
+    #[test]
+    fn zero_activity_uses_current_time() {
+        let cache = Arc::new(Cache::new(100));
+        let mut c = make_collector_with_cache(cache.clone());
+
+        let mut m = meta("$1", "%1");
+        m.pane_last_activity = 0; // triggers fallback to now
+        let (sessions, panes) = c.update_cache(std::slice::from_ref(&m));
+
+        // created_at should be recent (not zero)
+        assert!(sessions[0].created_at > 0);
+        assert!(panes[0].created_at > 0);
+    }
+
+    // --- Config defaults ---
+
+    #[test]
+    fn config_defaults() {
+        let config = TmuxCollectorConfig::default();
+        assert_eq!(config.poll_interval, Duration::from_millis(1500));
+        assert_eq!(config.max_output_bytes, 256 * 1024);
+        assert!(config.format.contains("session_id"));
+        assert!(config.format.contains("pane_dead"));
+    }
+
+    // --- Pane belongs to correct session ---
+
+    #[test]
+    fn pane_session_uid_matches_parent() {
+        let cache = Arc::new(Cache::new(100));
+        let mut c = make_collector_with_cache(cache.clone());
+
+        let metas = vec![meta("$1", "%1"), meta("$2", "%2")];
+        let (sessions, panes) = c.update_cache(&metas);
+
+        // Pane %1 belongs to session $1
+        assert_eq!(panes[0].session_uid, sessions[0].session_uid);
+        // Pane %2 belongs to session $2
+        assert_eq!(panes[1].session_uid, sessions[1].session_uid);
+    }
 }
