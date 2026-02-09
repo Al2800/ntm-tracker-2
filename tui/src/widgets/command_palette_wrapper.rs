@@ -187,4 +187,115 @@ mod tests {
         state.close();
         assert!(!state.visible);
     }
+
+    // ========================================================
+    // PaletteState::handle_event() tests
+    // ========================================================
+
+    fn press(code: ftui::KeyCode) -> Event {
+        Event::Key(ftui::KeyEvent::new(code))
+    }
+
+    #[test]
+    fn test_handle_event_not_visible_returns_none() {
+        let mut state = PaletteState::new();
+        assert!(!state.visible);
+        let result = state.handle_event(&press(ftui::KeyCode::Enter));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_handle_event_escape_closes_and_returns_none() {
+        let mut state = PaletteState::new();
+        let sessions = vec![make_session("s1", "proj")];
+        state.open(&sessions, &[]);
+        assert!(state.visible);
+        let result = state.handle_event(&press(ftui::KeyCode::Escape));
+        assert!(result.is_none());
+        assert!(!state.visible);
+    }
+
+    #[test]
+    fn test_handle_event_enter_executes_and_returns_action_id() {
+        let mut state = PaletteState::new();
+        let sessions = vec![make_session("s1", "my-project")];
+        state.open(&sessions, &[]);
+        assert!(state.visible);
+        // Enter on default selection returns some action ID
+        let result = state.handle_event(&press(ftui::KeyCode::Enter));
+        assert!(result.is_some());
+        let action_id = result.unwrap();
+        // Should be one of the registered actions (tab, goto, or kill)
+        assert!(
+            action_id.starts_with("tab:") || action_id.starts_with("goto:") || action_id.starts_with("kill:"),
+            "Unexpected action_id: {action_id}"
+        );
+        assert!(!state.visible);
+    }
+
+    #[test]
+    fn test_handle_event_typing_keeps_palette_open() {
+        let mut state = PaletteState::new();
+        let sessions = vec![make_session("s1", "proj")];
+        state.open(&sessions, &[]);
+        // Type some characters
+        let result1 = state.handle_event(&press(ftui::KeyCode::Char('h')));
+        assert!(result1.is_none());
+        assert!(state.visible);
+        let result2 = state.handle_event(&press(ftui::KeyCode::Char('e')));
+        assert!(result2.is_none());
+        assert!(state.visible);
+    }
+
+    #[test]
+    fn test_handle_event_down_arrow_keeps_palette_open() {
+        let mut state = PaletteState::new();
+        let sessions = vec![make_session("s1", "proj")];
+        state.open(&sessions, &[]);
+        let result = state.handle_event(&press(ftui::KeyCode::Down));
+        assert!(result.is_none());
+        assert!(state.visible);
+    }
+
+    #[test]
+    fn test_handle_event_navigate_then_execute() {
+        let mut state = PaletteState::new();
+        let sessions = vec![make_session("s1", "proj")];
+        state.open(&sessions, &[]);
+        // Move down once, then execute — should get a different action than default
+        let default_result = {
+            let mut s = PaletteState::new();
+            s.open(&sessions, &[]);
+            s.handle_event(&press(ftui::KeyCode::Enter)).unwrap()
+        };
+        state.handle_event(&press(ftui::KeyCode::Down));
+        let result = state.handle_event(&press(ftui::KeyCode::Enter));
+        assert!(result.is_some());
+        let navigated_id = result.unwrap();
+        // After navigating down, should get a different action
+        assert_ne!(navigated_id, default_result, "Down should change selection");
+        assert!(!state.visible);
+    }
+
+    #[test]
+    fn test_open_replaces_actions() {
+        let mut state = PaletteState::new();
+        let sessions1 = vec![make_session("s1", "first")];
+        state.open(&sessions1, &[]);
+        // Execute first action
+        state.handle_event(&press(ftui::KeyCode::Enter));
+        assert!(!state.visible);
+        // Open with different sessions
+        let sessions2 = vec![make_session("s2", "second")];
+        state.open(&sessions2, &[]);
+        assert!(state.visible);
+        // Navigate to goto action and execute
+        // Tab actions are first (4), then goto actions
+        for _ in 0..4 {
+            state.handle_event(&press(ftui::KeyCode::Down));
+        }
+        let result = state.handle_event(&press(ftui::KeyCode::Enter));
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), "goto:s2");
+    }
 }
