@@ -229,4 +229,74 @@ mod tests {
         let result = truncate_id("abcdefghij", 5);
         assert!(result.contains('…'));
     }
+
+    // === Render tests ===
+
+    use crate::rpc::types::EventView;
+    use crate::test_helpers::*;
+    use ftui::core::geometry::Rect;
+
+    fn make_event(etype: &str, session: &str) -> EventView {
+        EventView {
+            event_type: etype.to_string(),
+            session_id: session.to_string(),
+            pane_id: "p1".to_string(),
+            detected_at: chrono::Utc::now().timestamp(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_render_empty_all_filter_shows_no_events_yet() {
+        test_frame!(pool, frame, 50, 8);
+        let area = Rect::new(0, 0, 50, 8);
+        let mut state = EventTimelineState::new();
+        render(&mut frame, area, &[], &mut state, false, EventFilter::All);
+        assert_text_present(&frame.buffer, "No events yet");
+    }
+
+    #[test]
+    fn test_render_empty_filtered_shows_no_matching() {
+        test_frame!(pool, frame, 50, 8);
+        let area = Rect::new(0, 0, 50, 8);
+        let events = vec![make_event("compact", "s1")];
+        let mut state = EventTimelineState::new();
+        render(&mut frame, area, &events, &mut state, false, EventFilter::Escalations);
+        assert_text_present(&frame.buffer, "No matching events");
+    }
+
+    #[test]
+    fn test_render_shows_event_type_icon() {
+        test_frame!(pool, frame, 80, 10);
+        let area = Rect::new(0, 0, 80, 10);
+        let events = vec![make_event("escalation", "s1")];
+        let mut state = EventTimelineState::new();
+        render(&mut frame, area, &events, &mut state, false, EventFilter::All);
+        // Escalation icon is "!"
+        assert_text_present(&frame.buffer, "!");
+    }
+
+    #[test]
+    fn test_render_shows_title() {
+        test_frame!(pool, frame, 50, 8);
+        let area = Rect::new(0, 0, 50, 8);
+        let mut state = EventTimelineState::new();
+        render(&mut frame, area, &[], &mut state, false, EventFilter::All);
+        assert_text_present(&frame.buffer, "Recent Events");
+    }
+
+    #[test]
+    fn test_render_filters_events_correctly() {
+        test_frame!(pool, frame, 80, 10);
+        let area = Rect::new(0, 0, 80, 10);
+        let events = vec![
+            make_event("compact", "s1"),
+            make_event("session_start", "s2"),
+        ];
+        let mut state = EventTimelineState::new();
+        render(&mut frame, area, &events, &mut state, false, EventFilter::Sessions);
+        // session_start should be visible, compact should not
+        assert_text_present(&frame.buffer, "session_start");
+        assert_text_absent(&frame.buffer, "compact");
+    }
 }

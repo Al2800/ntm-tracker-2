@@ -52,8 +52,10 @@ pub fn render(frame: &mut Frame, area: Rect, stats: &StatsSummary) {
 pub(crate) fn format_active_time(minutes: u64) -> String {
     let hours = minutes / 60;
     let mins = minutes % 60;
-    if hours > 0 {
-        format!("{hours}.{mins_frac}h", mins_frac = mins * 10 / 60)
+    if hours > 0 && mins > 0 {
+        format!("{hours}h {mins}m")
+    } else if hours > 0 {
+        format!("{hours}h")
     } else {
         format!("{mins}m")
     }
@@ -75,25 +77,85 @@ mod tests {
 
     #[test]
     fn test_format_exactly_60() {
-        let result = format_active_time(60);
-        assert!(result.contains("1."), "Expected 1.Xh, got: {result}");
-        assert!(result.contains('h'));
+        assert_eq!(format_active_time(60), "1h");
     }
 
     #[test]
     fn test_format_90_minutes() {
-        let result = format_active_time(90);
-        assert!(result.contains('h'), "Expected hours format, got: {result}");
+        assert_eq!(format_active_time(90), "1h 30m");
     }
 
     #[test]
     fn test_format_large_value() {
-        let result = format_active_time(1440);
-        assert!(result.contains("24."), "Expected 24h, got: {result}");
+        assert_eq!(format_active_time(1440), "24h");
     }
 
     #[test]
     fn test_format_1_minute() {
         assert_eq!(format_active_time(1), "1m");
+    }
+
+    // === Render tests ===
+
+    use crate::test_helpers::*;
+    use ftui::core::geometry::Rect;
+
+    fn sample_stats() -> StatsSummary {
+        StatsSummary {
+            sessions: 5,
+            panes: 12,
+            total_compacts: 42,
+            active_minutes: 90,
+            estimated_tokens: 150_000,
+        }
+    }
+
+    #[test]
+    fn test_render_shows_session_count() {
+        test_frame!(pool, frame, 80, 4);
+        let area = Rect::new(0, 0, 80, 4);
+        render(&mut frame, area, &sample_stats());
+        assert_text_present(&frame.buffer, "5");
+        assert_text_present(&frame.buffer, "Sessions");
+    }
+
+    #[test]
+    fn test_render_shows_pane_count() {
+        test_frame!(pool, frame, 80, 4);
+        let area = Rect::new(0, 0, 80, 4);
+        render(&mut frame, area, &sample_stats());
+        assert_text_present(&frame.buffer, "12");
+        assert_text_present(&frame.buffer, "Panes");
+    }
+
+    #[test]
+    fn test_render_shows_compacts_and_tokens() {
+        test_frame!(pool, frame, 80, 4);
+        let area = Rect::new(0, 0, 80, 4);
+        render(&mut frame, area, &sample_stats());
+        assert_text_present(&frame.buffer, "42");
+        assert_text_present(&frame.buffer, "Compacts");
+        assert_text_present(&frame.buffer, "150K");
+        assert_text_present(&frame.buffer, "Tokens");
+    }
+
+    #[test]
+    fn test_render_shows_active_time() {
+        test_frame!(pool, frame, 80, 4);
+        let area = Rect::new(0, 0, 80, 4);
+        render(&mut frame, area, &sample_stats());
+        assert_text_present(&frame.buffer, "1h 30m");
+        assert_text_present(&frame.buffer, "Active");
+    }
+
+    #[test]
+    fn test_render_zero_stats() {
+        test_frame!(pool, frame, 80, 4);
+        let area = Rect::new(0, 0, 80, 4);
+        let stats = StatsSummary::default();
+        render(&mut frame, area, &stats);
+        // Should render without panicking and show labels
+        assert_text_present(&frame.buffer, "Sessions");
+        assert_text_present(&frame.buffer, "0m");
     }
 }

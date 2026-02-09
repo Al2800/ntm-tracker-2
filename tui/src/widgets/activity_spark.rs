@@ -146,4 +146,47 @@ mod tests {
         let (buckets, _) = bucket_events(&[too_old, future], now);
         assert!(buckets.iter().all(|&b| b == 0));
     }
+
+    // === Render tests ===
+
+    use crate::rpc::types::EventView;
+    use crate::test_helpers::*;
+    use ftui::core::geometry::Rect;
+
+    #[test]
+    fn test_render_empty_events_shows_title() {
+        test_frame!(pool, frame, 40, 5);
+        let area = Rect::new(0, 0, 40, 5);
+        render(&mut frame, area, &[], false);
+        assert_text_present(&frame.buffer, "Activity (24h)");
+    }
+
+    #[test]
+    fn test_render_with_events_shows_sparkline() {
+        let now = chrono::Utc::now().timestamp();
+        let events: Vec<EventView> = (0..10)
+            .map(|i| EventView {
+                detected_at: now - (i * 600), // every 10 minutes
+                event_type: "compact".to_string(),
+                ..Default::default()
+            })
+            .collect();
+        test_frame!(pool, frame, 40, 5);
+        let area = Rect::new(0, 0, 40, 5);
+        render(&mut frame, area, &events, false);
+        // Should contain sparkline chars (any of the SPARK_CHARS)
+        let lines = buf_to_lines(&frame.buffer);
+        let has_spark = lines.iter().any(|l| {
+            theme::SPARK_CHARS.iter().any(|&ch| l.contains(ch))
+        });
+        assert!(has_spark, "No sparkline characters found in: {lines:?}");
+    }
+
+    #[test]
+    fn test_render_no_panic_on_small_area() {
+        test_frame!(pool, frame, 10, 3);
+        let area = Rect::new(0, 0, 10, 3);
+        render(&mut frame, area, &[], true);
+        // Just verify no panic
+    }
 }

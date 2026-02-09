@@ -158,4 +158,64 @@ mod tests {
         let result = truncate("abcdefghijklmnop", 5);
         assert!(result.contains('…'));
     }
+
+    // === Render tests ===
+
+    use crate::rpc::types::EventView;
+    use crate::test_helpers::*;
+    use ftui::core::geometry::Rect;
+
+    fn make_escalation(session: &str, pane: &str, severity: &str) -> EventView {
+        EventView {
+            event_type: "escalation".to_string(),
+            session_id: session.to_string(),
+            pane_id: pane.to_string(),
+            detected_at: chrono::Utc::now().timestamp(),
+            severity: Some(severity.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_render_empty_shows_no_escalations() {
+        test_frame!(pool, frame, 50, 6);
+        let area = Rect::new(0, 0, 50, 6);
+        let mut state = EscalationInboxState::new();
+        render(&mut frame, area, &[], &mut state, false);
+        assert_text_present(&frame.buffer, "No escalations");
+    }
+
+    #[test]
+    fn test_render_with_escalations_shows_count_in_title() {
+        test_frame!(pool, frame, 60, 8);
+        let area = Rect::new(0, 0, 60, 8);
+        let escalations = vec![
+            make_escalation("sess1", "pane1", "high"),
+            make_escalation("sess2", "pane2", "critical"),
+        ];
+        let mut state = EscalationInboxState::new();
+        render(&mut frame, area, &escalations, &mut state, true);
+        assert_text_present(&frame.buffer, "Escalations (2)");
+    }
+
+    #[test]
+    fn test_render_escalation_shows_exclamation() {
+        test_frame!(pool, frame, 60, 8);
+        let area = Rect::new(0, 0, 60, 8);
+        let escalations = vec![make_escalation("my-session", "pane-0", "medium")];
+        let mut state = EscalationInboxState::new();
+        render(&mut frame, area, &escalations, &mut state, false);
+        assert_text_present(&frame.buffer, "!");
+    }
+
+    #[test]
+    fn test_render_empty_title_no_count() {
+        test_frame!(pool, frame, 50, 6);
+        let area = Rect::new(0, 0, 50, 6);
+        let mut state = EscalationInboxState::new();
+        render(&mut frame, area, &[], &mut state, false);
+        assert_text_present(&frame.buffer, "Escalations");
+        // Should NOT have count in title when empty
+        assert_text_absent(&frame.buffer, "Escalations (0)");
+    }
 }

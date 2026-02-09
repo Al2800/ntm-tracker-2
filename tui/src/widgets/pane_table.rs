@@ -100,7 +100,7 @@ pub fn render(
 
     let widths = [
         Constraint::Fixed(4),
-        Constraint::Fixed(6),
+        Constraint::Fixed(8),
         Constraint::Fixed(14),
         Constraint::Min(16),
         Constraint::Fixed(8),
@@ -169,5 +169,64 @@ mod tests {
         assert_eq!(state.selected(), None);
         state.table_state.select(Some(2));
         assert_eq!(state.selected(), Some(2));
+    }
+
+    // === Render tests ===
+
+    use crate::rpc::types::PaneView;
+    use crate::test_helpers::*;
+    use ftui::core::geometry::Rect;
+
+    fn make_pane(id: &str, session_id: &str, status: &str, cmd: Option<&str>) -> PaneView {
+        PaneView {
+            pane_id: id.to_string(),
+            session_id: session_id.to_string(),
+            status: status.to_string(),
+            pane_index: 0,
+            current_command: cmd.map(|c| c.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_render_empty_shows_no_panes() {
+        test_frame!(pool, frame, 60, 8);
+        let area = Rect::new(0, 0, 60, 8);
+        let mut state = PaneTableState::new();
+        render(&mut frame, area, &[], "test-session", &mut state, false);
+        assert_text_present(&frame.buffer, "No panes");
+    }
+
+    #[test]
+    fn test_render_title_includes_session_name() {
+        test_frame!(pool, frame, 60, 8);
+        let area = Rect::new(0, 0, 60, 8);
+        let mut state = PaneTableState::new();
+        render(&mut frame, area, &[], "my-project", &mut state, false);
+        assert_text_present(&frame.buffer, "Panes (my-project)");
+    }
+
+    #[test]
+    fn test_render_with_panes_shows_header() {
+        test_frame!(pool, frame, 80, 10);
+        let area = Rect::new(0, 0, 80, 10);
+        let panes = vec![make_pane("p1", "s1", "active", Some("vim"))];
+        let mut state = PaneTableState::new();
+        render(&mut frame, area, &panes, "dev", &mut state, true);
+        assert_text_present(&frame.buffer, "Agent");
+        assert_text_present(&frame.buffer, "Status");
+    }
+
+    #[test]
+    fn test_render_shows_pane_status() {
+        test_frame!(pool, frame, 80, 10);
+        let area = Rect::new(0, 0, 80, 10);
+        let panes = vec![
+            make_pane("p1", "s1", "active", Some("cargo test")),
+            make_pane("p2", "s1", "idle", None),
+        ];
+        let mut state = PaneTableState::new();
+        render(&mut frame, area, &panes, "dev", &mut state, false);
+        assert_text_present(&frame.buffer, "active");
     }
 }
