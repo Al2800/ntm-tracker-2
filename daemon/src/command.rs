@@ -252,6 +252,26 @@ async fn read_limited<R: AsyncRead + Unpin>(
 mod tests {
     use super::*;
 
+    fn echo_spec(text: &str) -> CommandSpec {
+        CommandSpec {
+            program: "echo".to_string(),
+            args: vec![text.to_string()],
+            timeout: Duration::from_secs(2),
+            max_output_bytes: 4096,
+            category: CommandCategory::TmuxFast,
+        }
+    }
+
+    fn failing_spec() -> CommandSpec {
+        CommandSpec {
+            program: "bash".to_string(),
+            args: vec!["-c".to_string(), "exit 1".to_string()],
+            timeout: Duration::from_secs(2),
+            max_output_bytes: 4096,
+            category: CommandCategory::TmuxFast,
+        }
+    }
+
     #[tokio::test]
     async fn timeout_triggers() {
         let runner = CommandRunner::new(CommandConfig::default());
@@ -278,5 +298,156 @@ mod tests {
         };
         let result = runner.run(spec).await;
         assert!(matches!(result, Err(CommandError::OutputTooLarge)));
+    }
+
+    // --- New tests ---
+
+    #[test]
+    fn command_config_defaults() {
+        let config = CommandConfig::default();
+        assert_eq!(config.max_concurrent, 4);
+        assert_eq!(config.max_output_bytes, 256 * 1024);
+        assert_eq!(config.tmux_timeout, Duration::from_secs(2));
+        assert_eq!(config.ntm_status_timeout, Duration::from_secs(10));
+        assert_eq!(config.ntm_tail_timeout, Duration::from_secs(15));
+    }
+
+    #[tokio::test]
+    async fn successful_echo_command() {
+        let runner = CommandRunner::new(CommandConfig::default());
+        let result = runner.run(echo_spec("hello world")).await.unwrap();
+        assert!(result.status.success());
+        let stdout = String::from_utf8_lossy(&result.stdout);
+        assert!(stdout.contains("hello world"));
+    }
+
+    #[tokio::test]
+    async fn captures_stderr() {
+        let runner = CommandRunner::new(CommandConfig::default());
+        let spec = CommandSpec {
+            program: "bash".to_string(),
+            args: vec!["-c".to_string(), "echo err >&2; echo out".to_string()],
+            timeout: Duration::from_secs(2),
+            max_output_bytes: 4096,
+            category: CommandCategory::TmuxFast,
+        };
+        let result = runner.run(spec).await.unwrap();
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        assert!(stderr.contains("err"));
+        let stdout = String::from_utf8_lossy(&result.stdout);
+        assert!(stdout.contains("out"));
+    }
+
+    #[tokio::test]
+    async fn exit_nonzero_returns_error() {
+        let runner = CommandRunner::new(CommandConfig::default());
+        let result = runner.run(failing_spec()).await;
+        assert!(matches!(result, Err(CommandError::ExitNonZero(1))));
+    }
+
+    #[tokio::test]
+    async fn spawn_nonexistent_binary() {
+        let runner = CommandRunner::new(CommandConfig::default());
+        let spec = CommandSpec {
+            program: "/nonexistent/binary".to_string(),
+            args: vec![],
+            timeout: Duration::from_secs(2),
+            max_output_bytes: 4096,
+            category: CommandCategory::TmuxFast,
+        };
+        let result = runner.run(spec).await;
+        assert!(matches!(result, Err(CommandError::Spawn(_))));
+    }
+
+    #[tokio::test]
+    async fn duration_is_recorded() {
+        let runner = CommandRunner::new(CommandConfig::default());
+        let spec = CommandSpec {
+            program: "bash".to_string(),
+            args: vec!["-c".to_string(), "sleep 0.05".to_string()],
+            timeout: Duration::from_secs(2),
+            max_output_bytes: 4096,
+            category: CommandCategory::TmuxFast,
+        };
+        let result = runner.run(spec).await.unwrap();
+        assert!(result.duration >= Duration::from_millis(30));
+    }
+
+    #[tokio::test]
+    async fn apply_defaults_fills_zero_timeout() {
+        let config = CommandConfig {
+            tmux_timeout: Duration::from_secs(5),
+            ..CommandConfig::default()
+        };
+        let runner = CommandRunner::new(config);
+        let mut spec = echo_spec("test");
+        spec.timeout = Duration::from_secs(0);
+        // apply_defaults is called inside run() — just ensure it doesn't fail
+        let result = runner.run(spec).await.unwrap();
+        assert!(result.status.success());
+    }
+
+    #[tokio::test]
+    async fn apply_defaults_fills_zero_output_bytes() {
+        let runner = CommandRunner::new(CommandConfig::default());
+        let mut spec = echo_spec("test");
+        spec.max_output_bytes = 0;
+        let result = runner.run(spec).await.unwrap();
+        assert!(result.status.success());
+    }
+
+    #[tokio::test]
+    async fn circuit_breaker_starts_closed() {
+        let breaker = CircuitBreaker::new();
+        // Should not error — circuit is closed initially
+        breaker.check(CommandCategory::TmuxFast).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn circuit_breaker_opens_after_ten_failures() {
+        let breaker = CircuitBreaker::new();
+        for _ in 0..10 {
+            let _ = breaker.record_failure(CommandCategory::TmuxFast).await;
+        }
+        // Circuit should now be open
+        let result = breaker.check(CommandCategory::TmuxFast).await;
+        assert!(matches!(result, Err(CommandError::CircuitOpen)));
+    }
+
+    #[tokio::test]
+    async fn circuit_breaker_success_resets() {
+        let breaker = CircuitBreaker::new();
+        for _ in 0..5 {
+            let _ = breaker.record_failure(CommandCategory::TmuxFast).await;
+        }
+        breaker.record_success(CommandCategory::TmuxFast).await;
+        // After success, circuit should be closed
+        breaker.check(CommandCategory::TmuxFast).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn circuit_breaker_per_category() {
+        let breaker = CircuitBreaker::new();
+        // Fail TmuxFast 10 times
+        for _ in 0..10 {
+            let _ = breaker.record_failure(CommandCategory::TmuxFast).await;
+        }
+        // TmuxFast is open
+        assert!(breaker.check(CommandCategory::TmuxFast).await.is_err());
+        // NtmStatus should still be closed
+        breaker.check(CommandCategory::NtmStatus).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn circuit_breaker_backoff_starts_at_three() {
+        let breaker = CircuitBreaker::new();
+        // 1-2 failures: no backoff
+        breaker.record_failure(CommandCategory::NtmStatus).await.unwrap();
+        breaker.record_failure(CommandCategory::NtmStatus).await.unwrap();
+        breaker.check(CommandCategory::NtmStatus).await.unwrap();
+        // 3rd failure: backoff starts
+        breaker.record_failure(CommandCategory::NtmStatus).await.unwrap();
+        let result = breaker.check(CommandCategory::NtmStatus).await;
+        assert!(matches!(result, Err(CommandError::CircuitOpen)));
     }
 }
