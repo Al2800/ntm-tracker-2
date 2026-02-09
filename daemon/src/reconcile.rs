@@ -326,4 +326,386 @@ mod tests {
         assert_eq!(result.panes.len(), 1);
         assert_eq!(result.panes[0].pane_uid, "pane_uid");
     }
+
+    // --- Helpers ---
+
+    fn empty_markdown() -> NtmMarkdown {
+        NtmMarkdown {
+            sessions: vec![],
+            panes: vec![],
+        }
+    }
+
+    fn make_ntm_session(name: &str, status: Option<&str>) -> NtmSession {
+        NtmSession {
+            name: name.to_string(),
+            status: status.map(|s| s.to_string()),
+            metadata: HashMap::new(),
+        }
+    }
+
+    fn make_ntm_pane(session: &str, pane: &str, status: Option<&str>, agent: Option<&str>) -> NtmPane {
+        NtmPane {
+            session: session.to_string(),
+            pane: pane.to_string(),
+            status: status.map(|s| s.to_string()),
+            agent: agent.map(|a| a.to_string()),
+            metadata: HashMap::new(),
+        }
+    }
+
+    fn reconcile(cache: &Cache, markdown: &NtmMarkdown, now: i64) -> ReconcileResult {
+        let mut session_uid_by_name = HashMap::new();
+        let mut pane_uid_by_key = HashMap::new();
+        reconcile_ntm_markdown(cache, markdown, now, &mut session_uid_by_name, &mut pane_uid_by_key)
+    }
+
+    // --- Empty input ---
+
+    #[test]
+    fn empty_markdown_produces_empty_result() {
+        let cache = Cache::new(128);
+        let result = reconcile(&cache, &empty_markdown(), 1000);
+        assert_eq!(result.sessions.len(), 0);
+        assert_eq!(result.panes.len(), 0);
+        assert_eq!(result.ended_sessions, 0);
+        assert_eq!(result.change_count(), 0);
+    }
+
+    // --- New session discovery ---
+
+    #[test]
+    fn new_session_created_from_markdown() {
+        let cache = Cache::new(128);
+        let now = 1_700_000_000;
+        let md = NtmMarkdown {
+            sessions: vec![make_ntm_session("new-sess", Some("active"))],
+            panes: vec![],
+        };
+        let result = reconcile(&cache, &md, now);
+
+        assert_eq!(result.sessions.len(), 1);
+        let sess = &result.sessions[0];
+        assert_eq!(sess.name, "new-sess");
+        assert_eq!(sess.status, SessionStatus::Active);
+        assert_eq!(sess.last_seen_at, now);
+        assert!(sess.ended_at.is_none());
+    }
+
+    // --- Session matching by name ---
+
+    #[test]
+    fn existing_session_matched_by_name() {
+        let cache = Cache::new(128);
+        let now = 1_700_000_000;
+
+        let mut existing = Session::new("ntm", "alpha", None, now - 100);
+        existing.session_uid = "alpha-uid".to_string();
+        cache.upsert_session(existing);
+
+        let md = NtmMarkdown {
+            sessions: vec![make_ntm_session("alpha", Some("active"))],
+            panes: vec![],
+        };
+
+        let mut session_uid_by_name = HashMap::new();
+        let mut pane_uid_by_key = HashMap::new();
+        let result = reconcile_ntm_markdown(
+            &cache, &md, now, &mut session_uid_by_name, &mut pane_uid_by_key,
+        );
+
+        assert_eq!(result.sessions.len(), 1);
+        assert_eq!(result.sessions[0].session_uid, "alpha-uid", "should reuse existing UID");
+        assert_eq!(result.sessions[0].last_seen_at, now);
+    }
+
+    // --- Session status mapping ---
+
+    #[test]
+    fn session_status_maps_correctly() {
+        assert_eq!(map_session_status(&Some("active".to_string())), Some(SessionStatus::Active));
+        assert_eq!(map_session_status(&Some("running".to_string())), Some(SessionStatus::Active));
+        assert_eq!(map_session_status(&Some("working".to_string())), Some(SessionStatus::Active));
+        assert_eq!(map_session_status(&Some("idle".to_string())), Some(SessionStatus::Idle));
+        assert_eq!(map_session_status(&Some("ended".to_string())), Some(SessionStatus::Ended));
+        assert_eq!(map_session_status(&Some("stopped".to_string())), Some(SessionStatus::Ended));
+        assert_eq!(map_session_status(&Some("dead".to_string())), Some(SessionStatus::Ended));
+        assert_eq!(map_session_status(&Some("unknown_status".to_string())), None);
+        assert_eq!(map_session_status(&None), None);
+    }
+
+    // --- Pane status mapping ---
+
+    #[test]
+    fn pane_status_maps_correctly() {
+        assert_eq!(map_pane_status(&Some("active".to_string())), Some(PaneStatus::Active));
+        assert_eq!(map_pane_status(&Some("waiting".to_string())), Some(PaneStatus::Waiting));
+        assert_eq!(map_pane_status(&Some("idle".to_string())), Some(PaneStatus::Idle));
+        assert_eq!(map_pane_status(&Some("ended".to_string())), Some(PaneStatus::Ended));
+        assert_eq!(map_pane_status(&None), None);
+    }
+
+    // --- Pane creation ---
+
+    #[test]
+    fn pane_created_with_correct_fields() {
+        let cache = Cache::new(128);
+        let now = 1_700_000_000;
+        let md = NtmMarkdown {
+            sessions: vec![make_ntm_session("sess", Some("active"))],
+            panes: vec![make_ntm_pane("sess", "2", Some("active"), Some("claude"))],
+        };
+        let result = reconcile(&cache, &md, now);
+
+        assert_eq!(result.panes.len(), 1);
+        let p = &result.panes[0];
+        assert_eq!(p.pane_index, 2);
+        assert_eq!(p.status, PaneStatus::Active);
+        assert_eq!(p.agent_type, Some("claude".to_string()));
+        assert_eq!(p.last_seen_at, now);
+        assert_eq!(p.status_reason, Some("ntm_status".to_string()));
+    }
+
+    // --- Pane UID stability ---
+
+    #[test]
+    fn pane_uid_stable_across_reconcile_calls() {
+        let cache = Cache::new(128);
+        let now = 1_700_000_000;
+        let md = NtmMarkdown {
+            sessions: vec![make_ntm_session("sess", Some("active"))],
+            panes: vec![make_ntm_pane("sess", "0", Some("active"), None)],
+        };
+
+        let mut session_uid_by_name = HashMap::new();
+        let mut pane_uid_by_key = HashMap::new();
+
+        let r1 = reconcile_ntm_markdown(
+            &cache, &md, now, &mut session_uid_by_name, &mut pane_uid_by_key,
+        );
+        let uid1 = r1.panes[0].pane_uid.clone();
+
+        let r2 = reconcile_ntm_markdown(
+            &cache, &md, now + 10, &mut session_uid_by_name, &mut pane_uid_by_key,
+        );
+        let uid2 = r2.panes[0].pane_uid.clone();
+
+        assert_eq!(uid1, uid2, "same pane key should produce same UID");
+    }
+
+    // --- Pane count reconciliation ---
+
+    #[test]
+    fn session_pane_count_updated() {
+        let cache = Cache::new(128);
+        let now = 1_700_000_000;
+        let md = NtmMarkdown {
+            sessions: vec![make_ntm_session("sess", Some("active"))],
+            panes: vec![
+                make_ntm_pane("sess", "0", Some("active"), None),
+                make_ntm_pane("sess", "1", Some("active"), None),
+                make_ntm_pane("sess", "2", Some("idle"), None),
+            ],
+        };
+        let result = reconcile(&cache, &md, now);
+
+        let sess = result.sessions.iter().find(|s| s.name == "sess").unwrap();
+        assert_eq!(sess.pane_count, 3);
+    }
+
+    // --- Ended session detection ---
+
+    #[test]
+    fn ended_session_only_marks_ntm_source() {
+        let cache = Cache::new(128);
+        let now = 1_700_000_000;
+
+        // Add a tmux-source session that is missing from markdown
+        let mut tmux_sess = Session::new("tmux", "tmux-only", None, now - 60);
+        tmux_sess.session_uid = "tmux-uid".to_string();
+        cache.upsert_session(tmux_sess);
+
+        let mut session_uid_by_name = HashMap::new();
+        session_uid_by_name.insert("tmux-only".to_string(), "tmux-uid".to_string());
+
+        let mut pane_uid_by_key = HashMap::new();
+        let result = reconcile_ntm_markdown(
+            &cache, &empty_markdown(), now, &mut session_uid_by_name, &mut pane_uid_by_key,
+        );
+
+        // tmux-sourced session should NOT be ended by NTM reconcile
+        assert_eq!(result.ended_sessions, 0);
+    }
+
+    // --- Already-ended session not re-ended ---
+
+    #[test]
+    fn already_ended_session_not_double_ended() {
+        let cache = Cache::new(128);
+        let now = 1_700_000_000;
+
+        let mut ended_sess = Session::new("ntm", "old", None, now - 200);
+        ended_sess.session_uid = "old-uid".to_string();
+        ended_sess.ended_at = Some(now - 100);
+        ended_sess.status = SessionStatus::Ended;
+        cache.upsert_session(ended_sess);
+
+        let mut session_uid_by_name = HashMap::new();
+        session_uid_by_name.insert("old".to_string(), "old-uid".to_string());
+        let mut pane_uid_by_key = HashMap::new();
+
+        let result = reconcile_ntm_markdown(
+            &cache, &empty_markdown(), now, &mut session_uid_by_name, &mut pane_uid_by_key,
+        );
+        assert_eq!(result.ended_sessions, 0, "already ended should not count again");
+    }
+
+    // --- Metadata merging ---
+
+    #[test]
+    fn session_metadata_merged() {
+        let cache = Cache::new(128);
+        let now = 1_700_000_000;
+        let mut meta = HashMap::new();
+        meta.insert("version".to_string(), "1.0".to_string());
+        meta.insert("env".to_string(), "prod".to_string());
+
+        let md = NtmMarkdown {
+            sessions: vec![NtmSession {
+                name: "sess".to_string(),
+                status: Some("active".to_string()),
+                metadata: meta,
+            }],
+            panes: vec![],
+        };
+        let result = reconcile(&cache, &md, now);
+        let sess = &result.sessions[0];
+        let metadata = sess.metadata.as_ref().expect("should have metadata");
+        assert_eq!(metadata["version"], "1.0");
+        assert_eq!(metadata["env"], "prod");
+    }
+
+    // --- Pane metadata extract ---
+
+    #[test]
+    fn pane_command_extracted_from_metadata() {
+        let cache = Cache::new(128);
+        let now = 1_700_000_000;
+        let mut meta = HashMap::new();
+        meta.insert("command".to_string(), "vim".to_string());
+
+        let md = NtmMarkdown {
+            sessions: vec![make_ntm_session("sess", Some("active"))],
+            panes: vec![NtmPane {
+                session: "sess".to_string(),
+                pane: "0".to_string(),
+                status: Some("active".to_string()),
+                agent: None,
+                metadata: meta,
+            }],
+        };
+        let result = reconcile(&cache, &md, now);
+        assert_eq!(result.panes[0].current_command, Some("vim".to_string()));
+    }
+
+    // --- parse_pane_index ---
+
+    #[test]
+    fn parse_pane_index_valid() {
+        assert_eq!(parse_pane_index("0"), 0);
+        assert_eq!(parse_pane_index("3"), 3);
+        assert_eq!(parse_pane_index("  7  "), 7);
+    }
+
+    #[test]
+    fn parse_pane_index_invalid_returns_zero() {
+        assert_eq!(parse_pane_index("abc"), 0);
+        assert_eq!(parse_pane_index(""), 0);
+    }
+
+    // --- extract_metadata ---
+
+    #[test]
+    fn extract_metadata_tries_multiple_keys() {
+        let mut meta = HashMap::new();
+        meta.insert("cmd".to_string(), "bash".to_string());
+
+        assert_eq!(
+            extract_metadata(&meta, &["command", "cmd"]),
+            Some("bash".to_string()),
+        );
+    }
+
+    #[test]
+    fn extract_metadata_skips_empty_values() {
+        let mut meta = HashMap::new();
+        meta.insert("command".to_string(), "".to_string());
+        meta.insert("cmd".to_string(), "zsh".to_string());
+
+        assert_eq!(
+            extract_metadata(&meta, &["command", "cmd"]),
+            Some("zsh".to_string()),
+        );
+    }
+
+    #[test]
+    fn extract_metadata_returns_none_when_missing() {
+        let meta = HashMap::new();
+        assert_eq!(extract_metadata(&meta, &["command", "cmd"]), None);
+    }
+
+    // --- Pane created for session not in sessions list ---
+
+    #[test]
+    fn pane_with_unseen_session_creates_fallback_session() {
+        let cache = Cache::new(128);
+        let now = 1_700_000_000;
+        let md = NtmMarkdown {
+            sessions: vec![], // no sessions declared
+            panes: vec![make_ntm_pane("orphan-sess", "0", Some("active"), None)],
+        };
+        let result = reconcile(&cache, &md, now);
+
+        // A fallback session should be created for the pane's session reference
+        let sess = result.sessions.iter().find(|s| s.name == "orphan-sess");
+        assert!(sess.is_some(), "fallback session should be created");
+        assert_eq!(result.panes.len(), 1);
+        assert_eq!(result.panes[0].session_uid, sess.unwrap().session_uid);
+    }
+
+    // --- change_count helper ---
+
+    #[test]
+    fn change_count_is_sessions_plus_panes() {
+        let r = ReconcileResult {
+            sessions: vec![Session::new("ntm", "a", None, 1)],
+            panes: vec![Pane::new("uid".to_string(), 0, 1, None, None, None)],
+            ended_sessions: 0,
+        };
+        assert_eq!(r.change_count(), 2);
+    }
+
+    // --- metadata_to_value ---
+
+    #[test]
+    fn metadata_to_value_converts_hashmap() {
+        let mut meta = HashMap::new();
+        meta.insert("key".to_string(), "value".to_string());
+        let val = metadata_to_value(&meta);
+        assert_eq!(val["key"], "value");
+    }
+
+    // --- Empty agent ignored ---
+
+    #[test]
+    fn empty_agent_string_not_set() {
+        let cache = Cache::new(128);
+        let now = 1_700_000_000;
+        let md = NtmMarkdown {
+            sessions: vec![make_ntm_session("sess", Some("active"))],
+            panes: vec![make_ntm_pane("sess", "0", Some("active"), Some(""))],
+        };
+        let result = reconcile(&cache, &md, now);
+        assert!(result.panes[0].agent_type.is_none(), "empty agent should be ignored");
+    }
 }
