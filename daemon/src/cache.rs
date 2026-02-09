@@ -652,4 +652,280 @@ mod tests {
         assert_eq!(health.status, "");
         assert!(health.last_error.is_none());
     }
+
+    // --- Polling state tests ---
+
+    #[test]
+    fn update_polling_snapshot_returns_true_on_change() {
+        let cache = Cache::new(10);
+        let datum = PollingDatum {
+            interval_ms: 2000,
+            mode: "active".to_string(),
+            reason: "sessions detected".to_string(),
+            last_change_at: 100,
+        };
+        assert!(cache.update_polling_snapshot(datum));
+    }
+
+    #[test]
+    fn update_polling_snapshot_returns_false_when_unchanged() {
+        let cache = Cache::new(10);
+        let datum = PollingDatum {
+            interval_ms: 2000,
+            mode: "active".to_string(),
+            reason: "sessions".to_string(),
+            last_change_at: 100,
+        };
+        cache.update_polling_snapshot(datum.clone());
+        assert!(!cache.update_polling_snapshot(datum));
+    }
+
+    #[test]
+    fn update_polling_tmux() {
+        let cache = Cache::new(10);
+        let datum = PollingDatum {
+            interval_ms: 5000,
+            mode: "idle".to_string(),
+            reason: "no activity".to_string(),
+            last_change_at: 200,
+        };
+        assert!(cache.update_polling_tmux(datum.clone()));
+        assert!(!cache.update_polling_tmux(datum));
+    }
+
+    #[test]
+    fn update_polling_ntm() {
+        let cache = Cache::new(10);
+        let datum = PollingDatum {
+            interval_ms: 10000,
+            mode: "background".to_string(),
+            reason: "no sessions".to_string(),
+            last_change_at: 300,
+        };
+        assert!(cache.update_polling_ntm(datum.clone()));
+        assert!(!cache.update_polling_ntm(datum));
+    }
+
+    #[test]
+    fn polling_state_reflects_all_channels() {
+        let cache = Cache::new(10);
+        cache.update_polling_snapshot(PollingDatum {
+            interval_ms: 1000,
+            mode: "fast".to_string(),
+            reason: "r1".to_string(),
+            last_change_at: 1,
+        });
+        cache.update_polling_tmux(PollingDatum {
+            interval_ms: 2000,
+            mode: "normal".to_string(),
+            reason: "r2".to_string(),
+            last_change_at: 2,
+        });
+        cache.update_polling_ntm(PollingDatum {
+            interval_ms: 3000,
+            mode: "slow".to_string(),
+            reason: "r3".to_string(),
+            last_change_at: 3,
+        });
+        let state = cache.polling_state();
+        assert_eq!(state.snapshot.interval_ms, 1000);
+        assert_eq!(state.tmux.interval_ms, 2000);
+        assert_eq!(state.ntm.interval_ms, 3000);
+    }
+
+    // --- Ring buffer edge cases ---
+
+    #[test]
+    fn event_ring_buffer_exact_capacity() {
+        let cache = Cache::new(3);
+        for i in 0..3 {
+            cache.record_event(EventRecord {
+                event_id: Some(i),
+                session_uid: "s".to_string(),
+                pane_uid: "p".to_string(),
+                event_type: "compact".to_string(),
+                detected_at: i,
+                severity: None,
+                status: None,
+            });
+        }
+        assert_eq!(cache.event_count(), 3);
+        // Add one more — should evict oldest
+        cache.record_event(EventRecord {
+            event_id: Some(3),
+            session_uid: "s".to_string(),
+            pane_uid: "p".to_string(),
+            event_type: "compact".to_string(),
+            detected_at: 3,
+            severity: None,
+            status: None,
+        });
+        assert_eq!(cache.event_count(), 3);
+        let events = cache.recent_events();
+        assert_eq!(events[0].event_id, Some(1));
+        assert_eq!(events[2].event_id, Some(3));
+    }
+
+    // --- Health status transitions ---
+
+    #[test]
+    fn health_status_transitions() {
+        let cache = Cache::new(10);
+        cache.set_health(HealthStatus {
+            status: "ok".to_string(),
+            last_error: None,
+        });
+        assert_eq!(cache.health().status, "ok");
+
+        cache.set_health(HealthStatus {
+            status: "degraded".to_string(),
+            last_error: Some("tmux timeout".to_string()),
+        });
+        assert_eq!(cache.health().status, "degraded");
+        assert_eq!(cache.health().last_error.as_deref(), Some("tmux timeout"));
+
+        cache.set_health(HealthStatus {
+            status: "ok".to_string(),
+            last_error: None,
+        });
+        assert_eq!(cache.health().status, "ok");
+        assert!(cache.health().last_error.is_none());
+    }
+
+    // --- Concurrent access ---
+
+    #[test]
+    fn concurrent_session_updates() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let cache = Arc::new(Cache::new(100));
+        let mut handles = vec![];
+
+        for i in 0..10 {
+            let cache = Arc::clone(&cache);
+            handles.push(thread::spawn(move || {
+                let session = make_session(&format!("sess-{i}"), &format!("name-{i}"));
+                cache.upsert_session(session);
+            }));
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        assert_eq!(cache.session_count(), 10);
+    }
+
+    #[test]
+    fn concurrent_pane_updates() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let cache = Arc::new(Cache::new(100));
+        let mut handles = vec![];
+
+        for i in 0..10 {
+            let cache = Arc::clone(&cache);
+            handles.push(thread::spawn(move || {
+                let pane = make_pane(&format!("pane-{i}"), "sess-1");
+                cache.upsert_pane(pane);
+            }));
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        assert_eq!(cache.pane_count(), 10);
+    }
+
+    #[test]
+    fn concurrent_event_recording() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let cache = Arc::new(Cache::new(100));
+        let mut handles = vec![];
+
+        for i in 0..20 {
+            let cache = Arc::clone(&cache);
+            handles.push(thread::spawn(move || {
+                cache.record_event(EventRecord {
+                    event_id: Some(i),
+                    session_uid: format!("s-{i}"),
+                    pane_uid: format!("p-{i}"),
+                    event_type: "compact".to_string(),
+                    detected_at: i,
+                    severity: None,
+                    status: None,
+                });
+            }));
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        assert_eq!(cache.event_count(), 20);
+    }
+
+    // --- Large snapshot ---
+
+    #[test]
+    fn apply_snapshot_with_many_sessions() {
+        let cache = Cache::new(200);
+        let sessions: Vec<Session> = (0..100)
+            .map(|i| make_session(&format!("sess-{i}"), &format!("name-{i}")))
+            .collect();
+        let panes: Vec<Pane> = (0..200)
+            .map(|i| make_pane(&format!("pane-{i}"), &format!("sess-{}", i / 2)))
+            .collect();
+
+        let snapshot = CacheSnapshot {
+            sessions,
+            panes,
+            events: vec![],
+            stats_today: StatsAggregate {
+                total_compacts: 50,
+                active_minutes: 300,
+                estimated_tokens: 100_000,
+            },
+            health: HealthStatus {
+                status: "ok".to_string(),
+                last_error: None,
+            },
+        };
+
+        cache.apply_snapshot(snapshot);
+        assert_eq!(cache.session_count(), 100);
+        assert_eq!(cache.pane_count(), 200);
+        assert_eq!(cache.stats_today().total_compacts, 50);
+    }
+
+    // --- Metrics accuracy ---
+
+    #[test]
+    fn metrics_accuracy_after_multiple_operations() {
+        let cache = Cache::new(10);
+        // Miss
+        cache.get_session("no-exist");
+        cache.get_session("no-exist-2");
+        // Add then hit
+        cache.upsert_session(make_session("s1", "alpha"));
+        cache.get_session("s1");
+        cache.get_session("s1");
+
+        let m = cache.metrics();
+        assert_eq!(m.session_misses, 2);
+        assert_eq!(m.session_hits, 2);
+
+        // Pane metrics
+        cache.get_pane("no-pane");
+        cache.upsert_pane(make_pane("p1", "s1"));
+        cache.get_pane("p1");
+        let m = cache.metrics();
+        assert_eq!(m.pane_misses, 1);
+        assert_eq!(m.pane_hits, 1);
+    }
 }
