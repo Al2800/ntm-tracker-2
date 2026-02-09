@@ -151,12 +151,19 @@ mod tests {
     use super::*;
     use crate::cache::Cache;
     use crate::config::ConfigManager;
+    use crate::rpc::Capabilities;
     use std::sync::Arc;
 
     fn test_context() -> RpcContext {
         let cache = Arc::new(Cache::new(100));
         let config = ConfigManager::default();
-        RpcContext::new(cache, config)
+        let caps = Capabilities {
+            ntm: false,
+            tmux: true,
+            stream: false,
+            systemd: false,
+        };
+        RpcContext::with_capabilities(cache, config, caps)
     }
 
     #[test]
@@ -209,5 +216,132 @@ mod tests {
         assert!(response.is_some());
         let resp = response.unwrap();
         assert!(resp.error.is_some());
+    }
+
+    // --- New tests for bd-31f7 ---
+
+    #[test]
+    fn hello_notification_format() {
+        let ctx = test_context();
+        let hello = JsonRpcNotification::new("core.hello", rpc::hello_payload(&ctx));
+        let json = serde_json::to_value(&hello).unwrap();
+        assert_eq!(json["jsonrpc"], "2.0");
+        assert_eq!(json["method"], "core.hello");
+        assert!(json["params"]["daemonVersion"].is_string());
+        assert_eq!(json["params"]["protocolVersion"], 1);
+        assert_eq!(json["params"]["schemaVersion"], 1);
+        assert!(json["params"]["instanceId"].is_string());
+        assert!(json["params"]["runId"].is_string());
+        assert_eq!(json["params"]["capabilities"]["tmux"], true);
+        assert_eq!(json["params"]["capabilities"]["ntm"], false);
+    }
+
+    #[test]
+    fn response_echoes_numeric_id() {
+        let ctx = test_context();
+        let line = r#"{"jsonrpc":"2.0","method":"health.get","params":{},"id":42}"#;
+        let resp = process_line(line, &ctx).unwrap();
+        assert_eq!(resp.id, serde_json::json!(42));
+    }
+
+    #[test]
+    fn response_echoes_string_id() {
+        let ctx = test_context();
+        let line = r#"{"jsonrpc":"2.0","method":"health.get","params":{},"id":"req-abc"}"#;
+        let resp = process_line(line, &ctx).unwrap();
+        assert_eq!(resp.id, serde_json::json!("req-abc"));
+    }
+
+    #[test]
+    fn error_response_echoes_id() {
+        let ctx = test_context();
+        let line = r#"{"jsonrpc":"2.0","method":"no.such.method","params":{},"id":99}"#;
+        let resp = process_line(line, &ctx).unwrap();
+        assert!(resp.error.is_some());
+        assert_eq!(resp.id, serde_json::json!(99));
+    }
+
+    #[test]
+    fn parse_error_uses_null_id() {
+        let ctx = test_context();
+        let line = "{broken json";
+        let resp = process_line(line, &ctx).unwrap();
+        assert_eq!(resp.id, Value::Null);
+        assert_eq!(resp.error.unwrap().code, JsonRpcError::PARSE_ERROR);
+    }
+
+    #[test]
+    fn notification_channel_creates_bounded_channel() {
+        let (tx, _rx) = notification_channel();
+        // Channel should accept sends up to its capacity (256)
+        assert!(!tx.is_closed());
+    }
+
+    #[test]
+    fn process_sessions_list_returns_success() {
+        let ctx = test_context();
+        let line = r#"{"jsonrpc":"2.0","method":"sessions.list","params":{},"id":1}"#;
+        let resp = process_line(line, &ctx).unwrap();
+        assert!(resp.result.is_some(), "sessions.list should return success");
+        assert!(resp.error.is_none());
+        // Result should contain a sessions array
+        let result = resp.result.unwrap();
+        assert!(result["sessions"].is_array());
+    }
+
+    #[test]
+    fn process_snapshot_get_returns_success() {
+        let ctx = test_context();
+        let line = r#"{"jsonrpc":"2.0","method":"snapshot.get","params":{},"id":1}"#;
+        let resp = process_line(line, &ctx).unwrap();
+        assert!(resp.result.is_some(), "snapshot.get should return success");
+        assert!(resp.error.is_none());
+    }
+
+    #[test]
+    fn process_stats_summary_returns_success() {
+        let ctx = test_context();
+        let line = r#"{"jsonrpc":"2.0","method":"stats.summary","params":{},"id":1}"#;
+        let resp = process_line(line, &ctx).unwrap();
+        assert!(resp.result.is_some(), "stats.summary should return success");
+        assert!(resp.error.is_none());
+    }
+
+    #[test]
+    fn response_serializes_to_valid_jsonrpc() {
+        let ctx = test_context();
+        let line = r#"{"jsonrpc":"2.0","method":"health.get","params":{},"id":1}"#;
+        let resp = process_line(line, &ctx).unwrap();
+        let json_str = serde_json::to_string(&resp).unwrap();
+        let parsed: Value = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(parsed["jsonrpc"], "2.0");
+        assert_eq!(parsed["id"], 1);
+        assert!(parsed.get("result").is_some());
+        // Error field should not be present in success response
+        assert!(parsed.get("error").is_none());
+    }
+
+    #[test]
+    fn error_response_serializes_with_code_and_message() {
+        let ctx = test_context();
+        let line = r#"{"jsonrpc":"2.0","method":"no.such","params":{},"id":5}"#;
+        let resp = process_line(line, &ctx).unwrap();
+        let json_str = serde_json::to_string(&resp).unwrap();
+        let parsed: Value = serde_json::from_str(&json_str).unwrap();
+        assert_eq!(parsed["jsonrpc"], "2.0");
+        assert_eq!(parsed["id"], 5);
+        assert!(parsed["error"]["code"].is_number());
+        assert!(parsed["error"]["message"].is_string());
+        // Result field should not be present in error response
+        assert!(parsed.get("result").is_none());
+    }
+
+    #[test]
+    fn invalid_version_preserves_request_id() {
+        let ctx = test_context();
+        let line = r#"{"jsonrpc":"3.0","method":"health.get","id":"my-id"}"#;
+        let resp = process_line(line, &ctx).unwrap();
+        assert_eq!(resp.id, serde_json::json!("my-id"));
+        assert_eq!(resp.error.unwrap().code, JsonRpcError::INVALID_REQUEST);
     }
 }
