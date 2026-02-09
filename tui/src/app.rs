@@ -1996,4 +1996,137 @@ mod tests {
         assert_eq!(msg2["method"], "method.two");
         assert_eq!(msg3["method"], "method.three");
     }
+
+    // ========================================================
+    // view() tests — full render via Frame buffer capture
+    // ========================================================
+
+    use crate::test_helpers::*;
+
+    #[test]
+    fn test_view_renders_header_with_tab_bar() {
+        test_frame!(pool, frame, 100, 30);
+        let app = NtmApp::new();
+        app.view(&mut frame);
+        assert_text_present(&frame.buffer, "NTM Tracker");
+        assert_text_present(&frame.buffer, "Dashboard");
+    }
+
+    #[test]
+    fn test_view_renders_footer_connection_bar() {
+        test_frame!(pool, frame, 100, 30);
+        let app = NtmApp::new();
+        app.view(&mut frame);
+        assert_text_present(&frame.buffer, "disconnected");
+    }
+
+    #[test]
+    fn test_view_renders_dashboard_content() {
+        test_frame!(pool, frame, 100, 30);
+        let app = NtmApp::new();
+        app.view(&mut frame);
+        // Dashboard should show overview cards
+        assert_text_present(&frame.buffer, "Sessions");
+        assert_text_present(&frame.buffer, "Panes");
+    }
+
+    #[test]
+    fn test_view_renders_sessions_tab() {
+        test_frame!(pool, frame, 100, 30);
+        let mut app = NtmApp::new();
+        app.tab = Tab::Sessions;
+        app.view(&mut frame);
+        // Sessions tab with no sessions shows empty state
+        assert_text_present(&frame.buffer, "No active sessions");
+    }
+
+    #[test]
+    fn test_view_renders_events_tab() {
+        test_frame!(pool, frame, 100, 30);
+        let mut app = NtmApp::new();
+        app.tab = Tab::Events;
+        app.view(&mut frame);
+        assert_text_present(&frame.buffer, "Filter");
+    }
+
+    #[test]
+    fn test_view_renders_health_tab() {
+        test_frame!(pool, frame, 100, 30);
+        let mut app = NtmApp::new();
+        app.tab = Tab::Health;
+        app.view(&mut frame);
+        assert_text_present(&frame.buffer, "Connection");
+        assert_text_present(&frame.buffer, "Daemon");
+    }
+
+    #[test]
+    fn test_view_renders_toast_overlay() {
+        test_frame!(pool, frame, 100, 30);
+        let app = NtmApp::new();
+        app.toast_queue
+            .borrow_mut()
+            .push("Operation succeeded!".to_string(), ToastLevel::Success);
+        app.view(&mut frame);
+        assert_text_present(&frame.buffer, "Operation succeeded!");
+    }
+
+    #[test]
+    fn test_view_renders_help_overlay() {
+        test_frame!(pool, frame, 100, 40);
+        let mut app = NtmApp::new();
+        app.show_help = true;
+        app.view(&mut frame);
+        assert_text_present(&frame.buffer, "NAVIGATION");
+        assert_text_present(&frame.buffer, "ACTIONS");
+    }
+
+    #[test]
+    fn test_view_renders_kill_confirm_modal() {
+        test_frame!(pool, frame, 100, 30);
+        let mut app = NtmApp::new();
+        app.pending_confirm = Some(ConfirmAction::KillSession {
+            session_id: "s1".to_string(),
+            session_name: "my-project".to_string(),
+        });
+        app.view(&mut frame);
+        assert_text_present(&frame.buffer, "Kill session");
+        assert_text_present(&frame.buffer, "my-project");
+        assert_text_present(&frame.buffer, "[y/n]");
+    }
+
+    #[test]
+    fn test_view_renders_pane_send_modal() {
+        test_frame!(pool, frame, 100, 30);
+        let mut app = NtmApp::new();
+        app.send_input_buf = "ls -la".to_string();
+        app.pending_confirm = Some(ConfirmAction::PaneSend {
+            pane_id: "%1".to_string(),
+            pane_label: "work #0".to_string(),
+        });
+        app.view(&mut frame);
+        assert_text_present(&frame.buffer, "Send to Pane");
+        assert_text_present(&frame.buffer, "work #0");
+        assert_text_present(&frame.buffer, "ls -la");
+    }
+
+    #[test]
+    fn test_view_active_tab_highlighted_in_header() {
+        test_frame!(pool, frame, 100, 30);
+        let mut app = NtmApp::new();
+        app.tab = Tab::Events;
+        app.view(&mut frame);
+        // Active tab should be in brackets
+        assert_text_present(&frame.buffer, "[3:Events]");
+    }
+
+    // ========================================================
+    // subscriptions() test
+    // ========================================================
+
+    #[test]
+    fn test_subscriptions_returns_two() {
+        let app = NtmApp::new();
+        let subs = app.subscriptions();
+        assert_eq!(subs.len(), 2);
+    }
 }
