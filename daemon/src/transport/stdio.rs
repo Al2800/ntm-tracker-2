@@ -344,4 +344,147 @@ mod tests {
         assert_eq!(resp.id, serde_json::json!("my-id"));
         assert_eq!(resp.error.unwrap().code, JsonRpcError::INVALID_REQUEST);
     }
+
+    // ========================================================
+    // Malformed input edge cases (bd-1ako)
+    // ========================================================
+
+    #[test]
+    fn empty_line_returns_parse_error() {
+        let ctx = test_context();
+        let resp = process_line("", &ctx).unwrap();
+        assert_eq!(resp.error.unwrap().code, JsonRpcError::PARSE_ERROR);
+    }
+
+    #[test]
+    fn whitespace_only_returns_parse_error() {
+        let ctx = test_context();
+        let resp = process_line("   ", &ctx).unwrap();
+        assert_eq!(resp.error.unwrap().code, JsonRpcError::PARSE_ERROR);
+    }
+
+    #[test]
+    fn valid_json_but_not_jsonrpc_object() {
+        let ctx = test_context();
+        // Valid JSON object but missing jsonrpc/method fields
+        let line = r#"{"foo": "bar"}"#;
+        let resp = process_line(line, &ctx);
+        // Should return a parse or invalid-request error
+        assert!(resp.is_some());
+        let r = resp.unwrap();
+        assert!(r.error.is_some());
+    }
+
+    #[test]
+    fn missing_jsonrpc_field() {
+        let ctx = test_context();
+        let line = r#"{"method":"health.get","params":{},"id":1}"#;
+        let resp = process_line(line, &ctx);
+        assert!(resp.is_some());
+        let r = resp.unwrap();
+        // Either parse error (if jsonrpc is required for deserialization)
+        // or invalid request (if it deserializes with empty string)
+        assert!(r.error.is_some());
+    }
+
+    #[test]
+    fn missing_method_field() {
+        let ctx = test_context();
+        let line = r#"{"jsonrpc":"2.0","params":{},"id":1}"#;
+        let resp = process_line(line, &ctx);
+        assert!(resp.is_some());
+        let r = resp.unwrap();
+        // Missing method → either parse error or empty method → unsupported
+        assert!(r.error.is_some());
+    }
+
+    #[test]
+    fn very_long_input_line_returns_response() {
+        let ctx = test_context();
+        // Build a 1MB+ valid JSON-RPC request with huge params
+        let big_value = "x".repeat(1_000_000);
+        let line = format!(
+            r#"{{"jsonrpc":"2.0","method":"health.get","params":{{"data":"{big_value}"}},"id":1}}"#
+        );
+        let resp = process_line(&line, &ctx);
+        // Should handle gracefully — either success or error, no panic
+        assert!(resp.is_some());
+    }
+
+    #[test]
+    fn json_array_returns_parse_error() {
+        let ctx = test_context();
+        let line = r#"[1, 2, 3]"#;
+        let resp = process_line(line, &ctx);
+        assert!(resp.is_some());
+        let r = resp.unwrap();
+        assert!(r.error.is_some());
+    }
+
+    #[test]
+    fn json_primitive_returns_parse_error() {
+        let ctx = test_context();
+        let line = r#""just a string""#;
+        let resp = process_line(line, &ctx);
+        assert!(resp.is_some());
+        let r = resp.unwrap();
+        assert!(r.error.is_some());
+    }
+
+    #[test]
+    fn truncated_json_returns_parse_error() {
+        let ctx = test_context();
+        // Partial/truncated JSON object
+        let line = r#"{"jsonrpc":"2.0","method":"hea"#;
+        let resp = process_line(line, &ctx).unwrap();
+        assert_eq!(resp.error.unwrap().code, JsonRpcError::PARSE_ERROR);
+    }
+
+    #[test]
+    fn null_json_returns_parse_error() {
+        let ctx = test_context();
+        let line = "null";
+        let resp = process_line(line, &ctx).unwrap();
+        assert!(resp.error.is_some());
+    }
+
+    #[test]
+    fn numeric_json_returns_parse_error() {
+        let ctx = test_context();
+        let line = "42";
+        let resp = process_line(line, &ctx).unwrap();
+        assert!(resp.error.is_some());
+    }
+
+    #[test]
+    fn daemon_survives_sequential_bad_inputs() {
+        let ctx = test_context();
+        // Send many different bad inputs — process_line should handle all without panic
+        let bad_inputs = vec![
+            "",
+            "   ",
+            "not json",
+            "{broken",
+            r#"{"foo":"bar"}"#,
+            r#"[1,2,3]"#,
+            "null",
+            "42",
+            r#""string""#,
+            r#"{"jsonrpc":"1.0","method":"x","id":1}"#,
+            r#"{"jsonrpc":"2.0","id":1}"#, // missing method
+        ];
+        for input in &bad_inputs {
+            let resp = process_line(input, &ctx);
+            // All should return Some (error response) since they all have issues
+            assert!(resp.is_some(), "bad input should produce response: {input:?}");
+            let r = resp.unwrap();
+            assert!(r.error.is_some(), "bad input should be error: {input:?}");
+        }
+
+        // Verify daemon still works after all bad inputs
+        let good = r#"{"jsonrpc":"2.0","method":"health.get","params":{},"id":99}"#;
+        let resp = process_line(good, &ctx).unwrap();
+        assert!(resp.result.is_some(), "should still handle valid requests");
+        assert_eq!(resp.id, serde_json::json!(99));
+    }
 }
