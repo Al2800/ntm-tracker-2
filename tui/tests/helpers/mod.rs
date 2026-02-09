@@ -1,5 +1,6 @@
 pub mod fixtures;
 pub mod logging;
+pub mod render;
 
 use ntm_tracker_tui::msg::{ConnState, Msg};
 use ntm_tracker_tui::rpc::types::JsonRpcMessage;
