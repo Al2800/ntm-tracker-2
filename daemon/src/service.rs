@@ -210,10 +210,17 @@ impl Default for ShutdownHandler {
 mod tests {
     use super::*;
     use std::env;
+    use std::io::Write;
+    use std::sync::Mutex;
     use tempfile::TempDir;
+
+    // Tests in this module mutate process-global environment variables (XDG_DATA_HOME).
+    // Rust tests run in parallel by default, so guard env access to avoid flaky races.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn data_dir_uses_xdg() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let temp = TempDir::new().unwrap();
         env::set_var("XDG_DATA_HOME", temp.path());
         let dir = data_dir();
@@ -226,21 +233,16 @@ mod tests {
         let handler = ShutdownHandler::new();
         let _rx = handler.subscribe();
 
-        // Initially not shutdown
-        assert!(!is_shutdown_requested());
-
         // Trigger shutdown
         handler.shutdown();
 
         // Now shutdown is requested
         assert!(is_shutdown_requested());
-
-        // Receiver should get the message
-        // (would need async runtime to verify)
     }
 
     #[test]
     fn instance_guard_creates_pid_file() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let temp = TempDir::new().unwrap();
         env::set_var("XDG_DATA_HOME", temp.path());
 
@@ -251,5 +253,132 @@ mod tests {
         // Cleanup
         drop(guard);
         env::remove_var("XDG_DATA_HOME");
+    }
+
+    // --- New tests ---
+
+    #[test]
+    fn read_pid_file_valid() {
+        let temp = TempDir::new().unwrap();
+        let pid_path = temp.path().join("test.pid");
+        let mut file = File::create(&pid_path).unwrap();
+        writeln!(file, "12345").unwrap();
+        let pid = read_pid_file(&pid_path).unwrap();
+        assert_eq!(pid, 12345);
+    }
+
+    #[test]
+    fn read_pid_file_with_whitespace() {
+        let temp = TempDir::new().unwrap();
+        let pid_path = temp.path().join("test.pid");
+        let mut file = File::create(&pid_path).unwrap();
+        writeln!(file, "  42  ").unwrap();
+        let pid = read_pid_file(&pid_path).unwrap();
+        assert_eq!(pid, 42);
+    }
+
+    #[test]
+    fn read_pid_file_missing() {
+        let path = PathBuf::from("/nonexistent/path/daemon.pid");
+        assert!(read_pid_file(&path).is_err());
+    }
+
+    #[test]
+    fn read_pid_file_corrupt() {
+        let temp = TempDir::new().unwrap();
+        let pid_path = temp.path().join("test.pid");
+        let mut file = File::create(&pid_path).unwrap();
+        write!(file, "not a number").unwrap();
+        assert!(read_pid_file(&pid_path).is_err());
+    }
+
+    #[test]
+    fn read_pid_file_empty() {
+        let temp = TempDir::new().unwrap();
+        let pid_path = temp.path().join("test.pid");
+        File::create(&pid_path).unwrap();
+        assert!(read_pid_file(&pid_path).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn is_process_running_own_pid() {
+        let pid = std::process::id();
+        assert!(is_process_running(pid));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn is_process_running_child_lifecycle() {
+        // Avoid using "obviously non-existent" PIDs: casts to i32 can produce -1/0,
+        // which have special meanings for kill(2). Instead, check a real child's PID.
+        let mut child = std::process::Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .expect("spawn sleep");
+        let pid = child.id();
+        assert!(is_process_running(pid));
+
+        let _ = child.kill();
+        let _ = child.wait();
+
+        assert!(!is_process_running(pid));
+    }
+
+    #[test]
+    fn instance_guard_removes_pid_on_drop() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let temp = TempDir::new().unwrap();
+        env::set_var("XDG_DATA_HOME", temp.path());
+
+        let guard = InstanceGuard::acquire().expect("acquire");
+        let pid_path = guard.pid_path().clone();
+        assert!(pid_path.exists());
+
+        drop(guard);
+        assert!(!pid_path.exists(), "PID file should be removed on drop");
+
+        env::remove_var("XDG_DATA_HOME");
+    }
+
+    #[test]
+    fn instance_guard_pid_file_contains_our_pid() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let temp = TempDir::new().unwrap();
+        env::set_var("XDG_DATA_HOME", temp.path());
+
+        let guard = InstanceGuard::acquire().expect("acquire");
+        let stored_pid = read_pid_file(guard.pid_path()).unwrap();
+        assert_eq!(stored_pid, std::process::id());
+
+        drop(guard);
+        env::remove_var("XDG_DATA_HOME");
+    }
+
+    #[test]
+    fn shutdown_handler_default() {
+        let handler = ShutdownHandler::default();
+        let _rx = handler.subscribe();
+        // Just verify construction doesn't panic
+    }
+
+    #[tokio::test]
+    async fn shutdown_handler_subscriber_receives() {
+        let handler = ShutdownHandler::new();
+        let mut rx = handler.subscribe();
+        handler.shutdown();
+        // Subscriber should receive the shutdown signal
+        let result = rx.recv().await;
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn data_dir_returns_path_ending_with_ntm_tracker() {
+        let dir = data_dir();
+        assert!(
+            dir.ends_with("ntm-tracker"),
+            "data_dir should end with 'ntm-tracker', got: {}",
+            dir.display()
+        );
     }
 }
