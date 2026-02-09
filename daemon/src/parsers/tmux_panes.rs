@@ -199,4 +199,60 @@ mod tests {
         assert_eq!(meta.pane_current_command, "bash");
         assert_eq!(meta.session_name, "cloud_function3");
     }
+
+    #[test]
+    fn handles_unicode_session_name() {
+        let line = "$1:项目-α:@2:%3:0:111:fish:1700000000:0:0";
+        let meta = parse_tmux_panes(line).expect("parse").remove(0);
+        assert_eq!(meta.session_name, "项目-α");
+    }
+
+    #[test]
+    fn handles_pid_zero() {
+        let line = "$1:sess:@2:%3:0:0:bash:1700000000:0:0";
+        let meta = parse_tmux_panes(line).expect("parse").remove(0);
+        assert_eq!(meta.pane_pid, 0);
+    }
+
+    #[test]
+    fn handles_negative_pane_index() {
+        let line = "$1:sess:@2:%3:-1:111:bash:1700000000:0:0";
+        let meta = parse_tmux_panes(line).expect("parse").remove(0);
+        assert_eq!(meta.pane_index, -1);
+    }
+
+    #[test]
+    fn handles_very_long_command() {
+        let long_cmd = "a".repeat(1000);
+        let line = format!("$1:sess:@2:%3:0:111:{long_cmd}:1700000000:0:0");
+        let meta = parse_tmux_panes(&line).expect("parse").remove(0);
+        assert_eq!(meta.pane_current_command.len(), 1000);
+    }
+
+    #[test]
+    fn handles_colons_in_command_via_splitn() {
+        // splitn(10, ':') means the 10th field captures everything after the 9th colon
+        // But the command is field 7 (index 6), so extra colons would break parsing
+        // This verifies the actual behavior — fails because colons shift fields
+        let line = "$1:sess:@2:%3:0:111:cmd:with:colons:0:0";
+        // splitn(10) produces: ["$1","sess","@2","%3","0","111","cmd","with","colons","0:0"]
+        // field 6 = "cmd", field 7 = "with" (activity), field 8 = "colons" (dead)
+        // This will fail because "with" isn't a valid timestamp and "colons" isn't 0/1
+        let result = parse_tmux_panes(line);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn skips_blank_lines_between_entries() {
+        let input = "$1:s1:@1:%1:0:111:bash:1700000000:0:0\n\n\n$2:s2:@2:%2:1:222:vim:1700000001:0:0";
+        let metas = parse_tmux_panes(input).expect("parse");
+        assert_eq!(metas.len(), 2);
+    }
+
+    #[test]
+    fn first_error_aborts_entire_parse() {
+        let input = "$1:s1:@1:%1:0:111:bash:1700000000:0:0\nbadline\n$2:s2:@2:%2:1:222:vim:1700000001:0:0";
+        let result = parse_tmux_panes(input);
+        assert!(result.is_err());
+    }
 }
