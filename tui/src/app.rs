@@ -451,7 +451,7 @@ impl NtmApp {
         Cmd::None
     }
 
-    fn handle_palette_action(&mut self, action_id: &str) -> Cmd<Msg> {
+    pub fn handle_palette_action(&mut self, action_id: &str) -> Cmd<Msg> {
         if let Some(tab_name) = action_id.strip_prefix("tab:") {
             match tab_name {
                 "dashboard" => self.tab = Tab::Dashboard,
