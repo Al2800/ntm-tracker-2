@@ -194,4 +194,47 @@ mod tests {
         let parsed = parse_ntm_markdown(markdown).expect("parse");
         assert!(parsed.sessions.len() + parsed.panes.len() >= 1);
     }
+
+    #[test]
+    fn handles_extra_columns_beyond_header() {
+        let markdown = "| session | pane |\n| --- | --- |\n| alpha | 0 | extra_value |";
+        let parsed = parse_ntm_markdown(markdown).expect("parse");
+        // Extra values beyond header columns are ignored
+        assert_eq!(parsed.panes.len(), 1);
+        assert_eq!(parsed.panes[0].pane, "0");
+    }
+
+    #[test]
+    fn handles_fewer_columns_than_header() {
+        let markdown = "| session | pane | status |\n| --- | --- | --- |\n| alpha | 0 |";
+        let parsed = parse_ntm_markdown(markdown).expect("parse");
+        assert_eq!(parsed.panes.len(), 1);
+        // Missing status column defaults to empty → None
+        assert_eq!(parsed.panes[0].status, None);
+    }
+
+    #[test]
+    fn handles_only_divider_row_no_data() {
+        let markdown = "| session | pane |\n| --- | --- |";
+        let parsed = parse_ntm_markdown(markdown).expect("parse");
+        assert_eq!(parsed.sessions.len(), 0);
+        assert_eq!(parsed.panes.len(), 0);
+    }
+
+    #[test]
+    fn rows_without_session_or_pane_are_skipped() {
+        let markdown = "| agent | status |\n| --- | --- |\n| claude | active |";
+        let parsed = parse_ntm_markdown(markdown).expect("parse");
+        // No session or pane column → both empty
+        assert_eq!(parsed.sessions.len(), 0);
+        assert_eq!(parsed.panes.len(), 0);
+    }
+
+    #[test]
+    fn handles_header_only_no_pipe_rows() {
+        // Input with pipes only in header, rest is text
+        let markdown = "| session | pane |\nsome random text";
+        let parsed = parse_ntm_markdown(markdown).expect("parse");
+        assert_eq!(parsed.panes.len(), 0);
+    }
 }

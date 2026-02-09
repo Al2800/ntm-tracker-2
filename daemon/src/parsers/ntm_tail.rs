@@ -189,4 +189,38 @@ mod tests {
         assert_eq!(tail.session, None);
         assert_eq!(tail.pane, None);
     }
+
+    #[test]
+    fn handles_non_string_session_and_pane() {
+        // session and pane are numbers instead of strings
+        let input = r#"{"session": 123, "pane": true, "lines": ["hello"]}"#;
+        let tail = parse_ntm_tail(input).expect("parse");
+        assert_eq!(tail.session, None); // not a string
+        assert_eq!(tail.pane, None); // not a string
+        assert_eq!(tail.lines.len(), 1);
+    }
+
+    #[test]
+    fn handles_large_array() {
+        let items: Vec<String> = (0..100).map(|i| format!("\"line-{i}\"")).collect();
+        let input = format!("[{}]", items.join(","));
+        let tail = parse_ntm_tail(&input).expect("parse");
+        assert_eq!(tail.lines.len(), 100);
+        assert_eq!(tail.lines[99], "line-99");
+    }
+
+    #[test]
+    fn handles_nested_objects_in_lines() {
+        let input = r#"{"lines": [{"nested": "object"}, "valid_line"]}"#;
+        let tail = parse_ntm_tail(input).expect("parse");
+        // Only string items are collected
+        assert_eq!(tail.lines.len(), 1);
+        assert_eq!(tail.lines[0], "valid_line");
+    }
+
+    #[test]
+    fn handles_empty_string_input() {
+        let result = parse_ntm_tail("");
+        assert!(result.is_err());
+    }
 }
