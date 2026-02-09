@@ -145,6 +145,11 @@ impl RpcClient {
     pub async fn get_snapshot(&self) -> Result<oneshot::Receiver<Result<Value, String>>, String> {
         self.request("snapshot.get", Value::Null).await
     }
+
+    /// Clone the write channel sender for fire-and-forget notifications.
+    pub fn write_sender(&self) -> mpsc::Sender<String> {
+        self.write_tx.clone()
+    }
 }
 
 fn handle_notification(msg: &JsonRpcMessage, tx: &mpsc::UnboundedSender<Msg>) {
@@ -154,7 +159,7 @@ fn handle_notification(msg: &JsonRpcMessage, tx: &mpsc::UnboundedSender<Msg>) {
             let version = msg
                 .params
                 .as_ref()
-                .and_then(|p| p.get("version"))
+                .and_then(|p| p.get("daemonVersion"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown")
                 .to_string();

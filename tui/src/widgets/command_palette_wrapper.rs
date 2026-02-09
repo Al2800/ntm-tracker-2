@@ -1,10 +1,11 @@
-use crate::rpc::types::SessionView;
+use crate::rpc::types::{PaneView, SessionView};
 use ftui::widgets::command_palette::{ActionItem, CommandPalette, PaletteAction};
 use ftui::Event;
 
 /// Build command palette actions dynamically from current state.
 pub fn build_actions(
     sessions: &[SessionView],
+    panes: &[PaneView],
 ) -> Vec<ActionItem> {
     let mut actions = Vec::new();
 
@@ -43,6 +44,24 @@ pub fn build_actions(
         );
     }
 
+    // Send to pane actions
+    for s in sessions {
+        let session_panes: Vec<&PaneView> = panes
+            .iter()
+            .filter(|p| p.session_id == s.session_id)
+            .collect();
+        for pane in session_panes {
+            actions.push(
+                ActionItem::new(
+                    format!("send:{}:{}", pane.tmux_pane_id.as_deref().unwrap_or(&pane.pane_id), s.name),
+                    format!("Send to: {} #{}", s.name, pane.pane_index),
+                )
+                .with_category("Actions")
+                .with_tags(&["pane", "send"]),
+            );
+        }
+    }
+
     actions
 }
 
@@ -60,8 +79,8 @@ impl PaletteState {
         }
     }
 
-    pub fn open(&mut self, sessions: &[SessionView]) {
-        let actions = build_actions(sessions);
+    pub fn open(&mut self, sessions: &[SessionView], panes: &[PaneView]) {
+        let actions = build_actions(sessions, panes);
         self.palette.replace_actions(actions);
         self.palette.open();
         self.visible = true;
@@ -72,11 +91,11 @@ impl PaletteState {
         self.visible = false;
     }
 
-    pub fn toggle(&mut self, sessions: &[SessionView]) {
+    pub fn toggle(&mut self, sessions: &[SessionView], panes: &[PaneView]) {
         if self.visible {
             self.close();
         } else {
-            self.open(sessions);
+            self.open(sessions, panes);
         }
     }
 
@@ -113,10 +132,20 @@ mod tests {
         }
     }
 
+    fn make_pane(id: &str, session_id: &str) -> PaneView {
+        PaneView {
+            pane_id: id.to_string(),
+            session_id: session_id.to_string(),
+            pane_index: 0,
+            tmux_pane_id: Some(format!("%{}", id.trim_start_matches('p'))),
+            ..Default::default()
+        }
+    }
+
     #[test]
     fn test_build_actions_includes_tabs() {
         let sessions = vec![make_session("s1", "project")];
-        let actions = build_actions(&sessions);
+        let actions = build_actions(&sessions, &[]);
         assert!(actions.iter().any(|a| a.title == "Tab: Dashboard"));
         assert!(actions.iter().any(|a| a.title == "Tab: Health"));
     }
@@ -127,25 +156,33 @@ mod tests {
             make_session("s1", "project-a"),
             make_session("s2", "project-b"),
         ];
-        let actions = build_actions(&sessions);
+        let actions = build_actions(&sessions, &[]);
         assert!(actions.iter().any(|a| a.title == "Go to: project-a"));
         assert!(actions.iter().any(|a| a.title == "Kill: project-b"));
+    }
+
+    #[test]
+    fn test_build_actions_includes_send_entries() {
+        let sessions = vec![make_session("s1", "project-a")];
+        let panes = vec![make_pane("p1", "s1")];
+        let actions = build_actions(&sessions, &panes);
+        assert!(actions.iter().any(|a| a.title == "Send to: project-a #0"));
     }
 
     #[test]
     fn test_palette_state_toggle() {
         let mut state = PaletteState::new();
         assert!(!state.visible);
-        state.toggle(&[]);
+        state.toggle(&[], &[]);
         assert!(state.visible);
-        state.toggle(&[]);
+        state.toggle(&[], &[]);
         assert!(!state.visible);
     }
 
     #[test]
     fn test_palette_state_close() {
         let mut state = PaletteState::new();
-        state.open(&[]);
+        state.open(&[], &[]);
         assert!(state.visible);
         state.close();
         assert!(!state.visible);

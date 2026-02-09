@@ -69,7 +69,7 @@ fn wsl_stdio_command(wsl_distro: Option<&str>) -> Command {
             cmd.args(["-d", distro]);
         }
     }
-    cmd.arg("--").arg("ntm-tracker-daemon").arg("--stdio");
+    cmd.arg("--").arg("ntm-tracker-daemon").arg("start").arg("--stdio");
     cmd
 }
 

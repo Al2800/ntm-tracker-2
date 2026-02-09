@@ -21,6 +21,9 @@ pub const INFO: PackedRgba = PackedRgba::rgb(56, 189, 248);      // sky-400
 pub const ACCENT: PackedRgba = PackedRgba::rgb(129, 140, 248);   // indigo-400
 pub const PAUSED: PackedRgba = PackedRgba::rgb(168, 85, 247);    // violet-400
 
+// ── Highlight ────────────────────────────────────────────────────
+pub const HIGHLIGHT_BG: PackedRgba = PackedRgba::rgb(30, 58, 95);   // subtle blue tint
+
 // ── Border colors ─────────────────────────────────────────────────
 pub const BORDER_DIM: PackedRgba = PackedRgba::rgb(51, 65, 85);  // slate-700
 pub const BORDER_FOCUS: PackedRgba = PackedRgba::rgb(56, 189, 248); // sky-400
@@ -70,7 +73,7 @@ pub fn title_style() -> Style {
 }
 
 pub fn highlight_style() -> Style {
-    Style::new().fg(BG_BASE).bg(INFO).bold()
+    Style::new().fg(TEXT_PRIMARY).bg(HIGHLIGHT_BG).bold()
 }
 
 pub fn active_tab_style() -> Style {

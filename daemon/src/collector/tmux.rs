@@ -20,7 +20,7 @@ impl Default for TmuxCollectorConfig {
     fn default() -> Self {
         Self {
             poll_interval: Duration::from_millis(1500),
-            format: "#{session_id}:#{window_id}:#{pane_id}:#{pane_index}:#{pane_pid}:#{pane_current_command}:#{pane_last_activity}:#{pane_dead}:#{pane_in_mode}".to_string(),
+            format: "#{session_id}:#{session_name}:#{window_id}:#{pane_id}:#{pane_index}:#{pane_pid}:#{pane_current_command}:#{pane_last_activity}:#{pane_dead}:#{pane_in_mode}".to_string(),
             max_output_bytes: 256 * 1024,
         }
     }
@@ -159,13 +159,20 @@ impl TmuxCollector {
                 .or_insert_with(|| uuid::Uuid::now_v7().to_string())
                 .clone();
 
+            let now = current_unix_ts();
+            let activity_ts = if meta.pane_last_activity > 0 {
+                meta.pane_last_activity
+            } else {
+                now
+            };
+
             let session = Session {
                 session_uid: session_uid.clone(),
                 source_id: "tmux".to_string(),
                 tmux_session_id: Some(meta.session_id.clone()),
-                name: meta.session_id.clone(),
-                created_at: meta.pane_last_activity,
-                last_seen_at: meta.pane_last_activity,
+                name: meta.session_name.clone(),
+                created_at: activity_ts,
+                last_seen_at: now,
                 ended_at: None,
                 status: SessionStatus::Active,
                 status_reason: Some("tmux_poll".to_string()),
@@ -181,11 +188,11 @@ impl TmuxCollector {
                 tmux_pane_pid: Some(meta.pane_pid),
                 pane_index: meta.pane_index,
                 agent_type: None,
-                created_at: meta.pane_last_activity,
-                last_seen_at: meta.pane_last_activity,
-                last_activity_at: Some(meta.pane_last_activity),
+                created_at: activity_ts,
+                last_seen_at: now,
+                last_activity_at: Some(activity_ts),
                 current_command: Some(meta.pane_current_command.clone()),
-                ended_at: if meta.pane_dead { Some(meta.pane_last_activity) } else { None },
+                ended_at: if meta.pane_dead { Some(now) } else { None },
                 status: if meta.pane_dead {
                     PaneStatus::Ended
                 } else {
@@ -224,6 +231,7 @@ mod tests {
 
         let meta = TmuxPaneMeta {
             session_id: "$1".to_string(),
+            session_name: "test_session".to_string(),
             window_id: "@1".to_string(),
             pane_id: "%1".to_string(),
             pane_index: 0,

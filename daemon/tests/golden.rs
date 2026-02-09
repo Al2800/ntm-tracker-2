@@ -119,7 +119,7 @@ fn snapshot_robot_tail() {
 
 #[test]
 fn snapshot_tmux_list_panes_parser() {
-    let parsed = parse_tmux_panes("$1:@2:%3:0:111:fish:1700000000:0:1\n").expect("parse");
+    let parsed = parse_tmux_panes("$1:mysession:@2:%3:0:111:fish:1700000000:0:1\n").expect("parse");
     let mut settings = insta::Settings::new();
     settings.set_sort_maps(true);
     settings.bind(|| {

@@ -13,7 +13,7 @@ use std::{
     sync::Mutex,
     time::Duration,
 };
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -140,7 +140,7 @@ impl Default for AppState {
 pub(crate) fn daemon_event_handler(app: &AppHandle) -> NotificationHandler {
     let app = app.clone();
     Arc::new(move |payload: Value| {
-        let _ = app.emit_all("daemon-event", payload);
+        let _ = app.emit("daemon-event", payload);
     })
 }
 

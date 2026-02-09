@@ -112,3 +112,85 @@ fn render_cache_card(frame: &mut Frame, area: Rect, app: &NtmApp) {
 
     para.render(area, frame);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::NtmApp;
+    use crate::msg::ConnState;
+    use crate::rpc::types::StatsSummary;
+    use crate::test_helpers::*;
+    use ftui::core::geometry::Rect;
+
+    fn app_with_connection() -> NtmApp {
+        let mut app = NtmApp::new();
+        app.conn_state = ConnState::Connected;
+        app.daemon_version = "2.1.0".to_string();
+        app.stats = StatsSummary {
+            sessions: 3,
+            panes: 8,
+            total_compacts: 50,
+            active_minutes: 120,
+            estimated_tokens: 200_000,
+        };
+        app
+    }
+
+    #[test]
+    fn test_render_shows_connection_panel() {
+        test_frame!(pool, frame, 80, 20);
+        let area = Rect::new(0, 0, 80, 20);
+        let app = app_with_connection();
+        render(&mut frame, area, &app);
+        assert_text_present(&frame.buffer, "Connection");
+    }
+
+    #[test]
+    fn test_render_shows_connected_status() {
+        test_frame!(pool, frame, 80, 20);
+        let area = Rect::new(0, 0, 80, 20);
+        let app = app_with_connection();
+        render(&mut frame, area, &app);
+        assert_text_present(&frame.buffer, "connected");
+        assert_text_present(&frame.buffer, "2.1.0");
+    }
+
+    #[test]
+    fn test_render_shows_daemon_panel() {
+        test_frame!(pool, frame, 80, 20);
+        let area = Rect::new(0, 0, 80, 20);
+        let app = app_with_connection();
+        render(&mut frame, area, &app);
+        assert_text_present(&frame.buffer, "Daemon");
+        assert_text_present(&frame.buffer, "JSON-RPC 2.0");
+    }
+
+    #[test]
+    fn test_render_shows_statistics() {
+        test_frame!(pool, frame, 80, 20);
+        let area = Rect::new(0, 0, 80, 20);
+        let app = app_with_connection();
+        render(&mut frame, area, &app);
+        assert_text_present(&frame.buffer, "Statistics");
+        assert_text_present(&frame.buffer, "Sessions: 3");
+        assert_text_present(&frame.buffer, "Panes: 8");
+    }
+
+    #[test]
+    fn test_render_shows_cache_info() {
+        test_frame!(pool, frame, 80, 20);
+        let area = Rect::new(0, 0, 80, 20);
+        let app = app_with_connection();
+        render(&mut frame, area, &app);
+        assert_text_present(&frame.buffer, "Cache Info");
+    }
+
+    #[test]
+    fn test_render_disconnected_shows_status() {
+        test_frame!(pool, frame, 80, 20);
+        let area = Rect::new(0, 0, 80, 20);
+        let app = NtmApp::new();
+        render(&mut frame, area, &app);
+        assert_text_present(&frame.buffer, "disconnected");
+    }
+}

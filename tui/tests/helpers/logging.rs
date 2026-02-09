@@ -31,6 +31,8 @@ pub struct TestLogger {
     steps: Mutex<Vec<StepRecord>>,
     context_stack: Mutex<Vec<String>>,
     json_mode: bool,
+    finished: Mutex<bool>,
+    failure_summary_printed: Mutex<bool>,
 }
 
 impl TestLogger {
@@ -55,6 +57,8 @@ impl TestLogger {
             steps: Mutex::new(Vec::new()),
             context_stack: Mutex::new(Vec::new()),
             json_mode,
+            finished: Mutex::new(false),
+            failure_summary_printed: Mutex::new(false),
         };
         if json_mode {
             logger.emit_json("start", None, None, None);
@@ -159,6 +163,7 @@ impl TestLogger {
 
     /// Print final result, total duration, and failure summary.
     pub fn finish(&self, passed: bool) {
+        *self.finished.lock().unwrap() = true;
         let elapsed = self.start.elapsed();
         let status = if passed { "PASS" } else { "FAIL" };
 
@@ -202,13 +207,14 @@ impl TestLogger {
             .push(name.to_string());
         let elapsed = self.start.elapsed();
         if self.json_mode {
-            let ctx = self.context_stack.lock().unwrap().clone();
-            let ctx_str = ctx.join(" > ");
-            let line = format!(
-                r#"{{"event":"enter_context","test":"{}","context":"{}","elapsed_ms":{:.1}}}"#,
-                self.test_name, ctx_str, elapsed.as_secs_f64() * 1000.0
-            );
-            self.push_line(&line);
+            let ctx_str = self.context_stack.lock().unwrap().join(" > ");
+            let obj = serde_json::json!({
+                "event": "enter_context",
+                "test": &self.test_name,
+                "context": ctx_str,
+                "elapsed_ms": elapsed.as_secs_f64() * 1000.0
+            });
+            self.push_line(&obj.to_string());
         } else {
             let ctx = self.context_stack.lock().unwrap().clone();
             let prefix = self.context_prefix(&ctx);
@@ -228,13 +234,13 @@ impl TestLogger {
         let name = self.context_stack.lock().unwrap().pop();
         if self.json_mode {
             if let Some(ref n) = name {
-                let line = format!(
-                    r#"{{"event":"exit_context","test":"{}","exited":"{}","elapsed_ms":{:.1}}}"#,
-                    self.test_name,
-                    n,
-                    elapsed.as_secs_f64() * 1000.0
-                );
-                self.push_line(&line);
+                let obj = serde_json::json!({
+                    "event": "exit_context",
+                    "test": &self.test_name,
+                    "exited": n,
+                    "elapsed_ms": elapsed.as_secs_f64() * 1000.0
+                });
+                self.push_line(&obj.to_string());
             }
         } else if let Some(ref n) = name {
             let line = format!(
@@ -282,17 +288,17 @@ impl TestLogger {
 
         let status = if passed { "PASS" } else { "FAIL" };
         if self.json_mode {
-            let line = format!(
-                r#"{{"event":"assert","test":"{}","step":{},"status":"{}","context":"{}","expected":"{}","actual":"{}","elapsed_ms":{:.1}}}"#,
-                self.test_name,
-                step_num,
-                status.to_lowercase(),
-                context,
-                format!("{:?}", expected).replace('"', r#"\""#),
-                format!("{:?}", actual).replace('"', r#"\""#),
-                elapsed_ms,
-            );
-            self.push_line(&line);
+            let obj = serde_json::json!({
+                "event": "assert",
+                "test": &self.test_name,
+                "step": step_num,
+                "status": status.to_lowercase(),
+                "context": context,
+                "expected": format!("{expected:?}"),
+                "actual": format!("{actual:?}"),
+                "elapsed_ms": elapsed_ms
+            });
+            self.push_line(&obj.to_string());
         } else {
             let line = format!(
                 "[{:.3}s] [{}] ASSERT {}: {} - {}",
@@ -362,22 +368,22 @@ impl TestLogger {
     }
 
     fn print_failure_summary(&self) {
+        if *self.failure_summary_printed.lock().unwrap() {
+            return;
+        }
         let failures = self.failures();
         if failures.is_empty() {
             return;
         }
+        *self.failure_summary_printed.lock().unwrap() = true;
         if self.json_mode {
-            let fail_json: Vec<String> = failures
-                .iter()
-                .map(|f| format!(r#""{}""#, f.replace('"', r#"\""#)))
-                .collect();
-            let line = format!(
-                r#"{{"event":"failure_summary","test":"{}","count":{},"failures":[{}]}}"#,
-                self.test_name,
-                failures.len(),
-                fail_json.join(",")
-            );
-            self.push_line(&line);
+            let obj = serde_json::json!({
+                "event": "failure_summary",
+                "test": &self.test_name,
+                "count": failures.len(),
+                "failures": failures,
+            });
+            self.push_line(&obj.to_string());
         } else {
             self.push_line(&format!(
                 "--- FAILURE SUMMARY: {} ({} failure{}) ---",
@@ -398,18 +404,22 @@ impl TestLogger {
     }
 
     fn emit_json(&self, event: &str, step: Option<usize>, desc: Option<&str>, elapsed_ms: Option<f64>) {
-        let step_str = step.map(|s| format!(r#","step":{s}"#)).unwrap_or_default();
-        let desc_str = desc
-            .map(|d| format!(r#","description":"{}""#, d.replace('"', r#"\""#)))
-            .unwrap_or_default();
-        let elapsed_str = elapsed_ms
-            .map(|e| format!(r#","elapsed_ms":{e:.1}"#))
-            .unwrap_or_default();
-        let line = format!(
-            r#"{{"event":"{event}","test":"{}"{step_str}{desc_str}{elapsed_str}}}"#,
-            self.test_name
-        );
-        self.push_line(&line);
+        let mut obj = serde_json::json!({
+            "event": event,
+            "test": &self.test_name,
+        });
+        if let Some(map) = obj.as_object_mut() {
+            if let Some(s) = step {
+                map.insert("step".to_string(), serde_json::json!(s));
+            }
+            if let Some(d) = desc {
+                map.insert("description".to_string(), serde_json::json!(d));
+            }
+            if let Some(e) = elapsed_ms {
+                map.insert("elapsed_ms".to_string(), serde_json::json!(e));
+            }
+        }
+        self.push_line(&obj.to_string());
     }
 
     fn emit_json_result(
@@ -421,48 +431,54 @@ impl TestLogger {
         duration_ms: f64,
     ) {
         let status = if passed { "pass" } else { "fail" };
-        let line = format!(
-            r#"{{"event":"step_result","test":"{}","step":{},"status":"{}","detail":"{}","elapsed_ms":{:.1},"duration_ms":{:.1}}}"#,
-            self.test_name,
-            step,
-            status,
-            detail.replace('"', r#"\""#),
-            elapsed_ms,
-            duration_ms,
-        );
-        self.push_line(&line);
+        let obj = serde_json::json!({
+            "event": "step_result",
+            "test": &self.test_name,
+            "step": step,
+            "status": status,
+            "detail": detail,
+            "elapsed_ms": elapsed_ms,
+            "duration_ms": duration_ms,
+        });
+        self.push_line(&obj.to_string());
     }
 
     fn emit_json_log(&self, msg: &str, elapsed_ms: f64) {
-        let line = format!(
-            r#"{{"event":"log","test":"{}","message":"{}","elapsed_ms":{:.1}}}"#,
-            self.test_name,
-            msg.replace('"', r#"\""#),
-            elapsed_ms,
-        );
-        self.push_line(&line);
+        let obj = serde_json::json!({
+            "event": "log",
+            "test": &self.test_name,
+            "message": msg,
+            "elapsed_ms": elapsed_ms,
+        });
+        self.push_line(&obj.to_string());
     }
 
     fn emit_json_finish(&self, passed: bool, elapsed_ms: f64) {
         let status = if passed { "pass" } else { "fail" };
-        let line = format!(
-            r#"{{"event":"finish","test":"{}","status":"{}","elapsed_ms":{:.1}}}"#,
-            self.test_name, status, elapsed_ms,
-        );
-        self.push_line(&line);
+        let obj = serde_json::json!({
+            "event": "finish",
+            "test": &self.test_name,
+            "status": status,
+            "elapsed_ms": elapsed_ms,
+        });
+        self.push_line(&obj.to_string());
     }
 }
 
 impl Drop for TestLogger {
     fn drop(&mut self) {
+        if !*self.finished.lock().unwrap() && !*self.failure_summary_printed.lock().unwrap() {
+            self.print_failure_summary();
+        }
+
         let elapsed = self.start.elapsed();
         if self.json_mode {
-            let line = format!(
-                r#"{{"event":"end","test":"{}","elapsed_ms":{:.1}}}"#,
-                self.test_name,
-                elapsed.as_secs_f64() * 1000.0
-            );
-            eprintln!("{line}");
+            let obj = serde_json::json!({
+                "event": "end",
+                "test": &self.test_name,
+                "elapsed_ms": elapsed.as_secs_f64() * 1000.0
+            });
+            eprintln!("{}", obj.to_string());
         } else {
             let line = format!(
                 "[{:.3}s] [{}] === END ({:.3}s) ===",

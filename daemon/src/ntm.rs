@@ -47,7 +47,6 @@ impl NtmClient {
             program: self.config.ntm_path.clone(),
             args: vec![
                 "--robot-markdown".to_string(),
-                "--md-compact".to_string(),
                 "--md-sections".to_string(),
                 "sessions".to_string(),
             ],

@@ -46,18 +46,18 @@ impl FocusArea {
     pub fn next(&self) -> FocusArea {
         match self {
             FocusArea::SessionList => FocusArea::PaneTable,
-            FocusArea::PaneTable => FocusArea::EscalationInbox,
-            FocusArea::EscalationInbox => FocusArea::EventTimeline,
-            FocusArea::EventTimeline => FocusArea::SessionList,
+            FocusArea::PaneTable => FocusArea::EventTimeline,
+            FocusArea::EventTimeline => FocusArea::EscalationInbox,
+            FocusArea::EscalationInbox => FocusArea::SessionList,
         }
     }
 
     pub fn prev(&self) -> FocusArea {
         match self {
-            FocusArea::SessionList => FocusArea::EventTimeline,
+            FocusArea::SessionList => FocusArea::EscalationInbox,
             FocusArea::PaneTable => FocusArea::SessionList,
-            FocusArea::EscalationInbox => FocusArea::PaneTable,
-            FocusArea::EventTimeline => FocusArea::EscalationInbox,
+            FocusArea::EventTimeline => FocusArea::PaneTable,
+            FocusArea::EscalationInbox => FocusArea::EventTimeline,
         }
     }
 }
@@ -115,6 +115,7 @@ impl EventFilter {
 #[derive(Debug, Clone)]
 pub enum ConfirmAction {
     KillSession { session_id: String, session_name: String },
+    PaneSend { pane_id: String, pane_label: String },
 }
 
 /// All messages the TUI can receive.
@@ -206,9 +207,9 @@ mod tests {
         let a = start.next();
         assert_eq!(a, FocusArea::PaneTable);
         let b = a.next();
-        assert_eq!(b, FocusArea::EscalationInbox);
+        assert_eq!(b, FocusArea::EventTimeline);
         let c = b.next();
-        assert_eq!(c, FocusArea::EventTimeline);
+        assert_eq!(c, FocusArea::EscalationInbox);
         let d = c.next();
         assert_eq!(d, FocusArea::SessionList);
     }
@@ -217,9 +218,9 @@ mod tests {
     fn test_focus_prev_full_cycle() {
         let start = FocusArea::SessionList;
         let a = start.prev();
-        assert_eq!(a, FocusArea::EventTimeline);
+        assert_eq!(a, FocusArea::EscalationInbox);
         let b = a.prev();
-        assert_eq!(b, FocusArea::EscalationInbox);
+        assert_eq!(b, FocusArea::EventTimeline);
         let c = b.prev();
         assert_eq!(c, FocusArea::PaneTable);
         let d = c.prev();

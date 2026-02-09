@@ -246,14 +246,51 @@ async fn run_daemon(
         maintenance_runner.run_loop(maintenance_shutdown).await;
     });
 
-    if ctx.capabilities.ntm {
+    // Perform initial polls before starting transports so first snapshot.get has data
+    // Note: NTM and tmux collectors create separate sessions with different UIDs,
+    // causing duplicate sessions and panes not matching NTM sessions.
+    // For now, prefer tmux collector when available since it provides actual pane data.
+    // TODO: Properly reconcile NTM and tmux collectors to share session UIDs.
+    let use_ntm_collector = ctx.capabilities.ntm && !ctx.capabilities.tmux;
+
+    if use_ntm_collector {
+        tracing::info!(kind = "ntm", "performing initial poll on startup");
+        let polling = ctx.config.current().polling;
+        let collector_config = NtmCollectorConfig {
+            active_interval: std::time::Duration::from_millis(polling.snapshot_interval_ms),
+            idle_interval: std::time::Duration::from_millis(polling.snapshot_idle_interval_ms),
+            idle_threshold_secs: polling.idle_threshold_secs,
+        };
+        let runner = CommandRunner::new(CommandConfig::default());
+        let client = NtmClient::new(runner, NtmConfig::default());
+        let bus = EventBus::new(8);
+        let mut collector = NtmCollector::new(client, bus, ctx.cache.clone(), collector_config);
+        if let Err(err) = collector.poll_once().await {
+            tracing::warn!(error = %err, "ntm initial poll failed");
+        }
+
         let ntm_shutdown = shutdown_handler.subscribe();
         spawn_ntm_collector(ctx.clone(), ntm_shutdown);
+    } else if ctx.capabilities.ntm {
+        tracing::info!("NTM available but tmux preferred; skipping NTM collector");
     } else {
         tracing::info!("NTM not detected; skipping NTM collector");
     }
 
     if ctx.capabilities.tmux {
+        tracing::info!(kind = "tmux", "performing initial poll on startup");
+        let polling = ctx.config.current().polling;
+        let collector_config = TmuxCollectorConfig {
+            poll_interval: std::time::Duration::from_millis(polling.snapshot_interval_ms),
+            ..TmuxCollectorConfig::default()
+        };
+        let runner = CommandRunner::new(CommandConfig::default());
+        let bus = EventBus::new(8);
+        let mut collector = TmuxCollector::new(runner, bus, ctx.cache.clone(), collector_config);
+        if let Err(err) = collector.poll_once().await {
+            tracing::warn!(error = %err, "tmux initial poll failed");
+        }
+
         let tmux_shutdown = shutdown_handler.subscribe();
         spawn_tmux_collector(ctx.clone(), tmux_shutdown);
     } else {

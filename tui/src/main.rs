@@ -40,29 +40,30 @@ fn main() -> std::io::Result<()> {
             .init();
     }
 
-    // Create the app state.
-    let mut app = NtmApp::new();
+    // Create the message channel (daemon → TUI).
+    let (msg_tx, msg_rx) = tokio::sync::mpsc::unbounded_channel::<Msg>();
+    let mut app = NtmApp::with_daemon_rx(msg_rx);
 
     // If not --no-daemon, spawn daemon and wire up RPC.
     if !cli.no_daemon {
         let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-        let (msg_tx, _msg_rx) = tokio::sync::mpsc::unbounded_channel::<Msg>();
+        let _guard = rt.enter();
 
         match RpcClient::spawn(&cli.daemon_bin, msg_tx.clone()) {
             Ok(client) => {
                 info!("Daemon spawned successfully");
 
-                // Request initial snapshot.
+                // Store write channel on app for fire-and-forget RPCs.
+                app.set_rpc_tx(client.write_sender());
+
+                // Request initial snapshot after short delay.
                 let msg_tx2 = msg_tx.clone();
                 rt.spawn(async move {
-                    // Small delay to let daemon start.
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                     match client.get_snapshot().await {
                         Ok(rx) => {
                             if let Ok(Ok(value)) = rx.await {
-                                if let Ok(snap) =
-                                    serde_json::from_value(value)
-                                {
+                                if let Ok(snap) = serde_json::from_value(value) {
                                     let _ = msg_tx2.send(Msg::SnapshotReceived(snap));
                                 }
                             }

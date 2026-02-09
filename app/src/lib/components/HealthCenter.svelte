@@ -1,8 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { goto } from '$app/navigation';
-  import { save } from '@tauri-apps/api/dialog';
-  import { open as openExternal } from '@tauri-apps/api/shell';
+  import { save } from '@tauri-apps/plugin-dialog';
+  import { open as openExternal } from '@tauri-apps/plugin-shell';
   import { daemonRestart, exportDiagnostics, rpcCallWithRetry } from '$lib/tauri';
   import { connectionState, lastConnectionError, lastHealthCheck } from '$lib/stores/connection';
   import { settings } from '$lib/stores/settings';

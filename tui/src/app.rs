@@ -15,9 +15,11 @@ use ftui::runtime::{Subscription, SubId, StopSignal, Every};
 use ftui::Style;
 use ftui::widgets::paragraph::Paragraph;
 use ftui::widgets::Widget;
+use serde_json::json;
 use std::cell::RefCell;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tracing::warn;
 
 /// Main application state.
 pub struct NtmApp {
@@ -25,6 +27,7 @@ pub struct NtmApp {
     pub tab: Tab,
     pub focus: FocusArea,
     pub show_help: bool,
+    pub help_scroll: u16,
 
     // Data
     pub sessions: Vec<SessionView>,
@@ -46,6 +49,12 @@ pub struct NtmApp {
     // Confirmation modal
     pub pending_confirm: Option<ConfirmAction>,
 
+    // Text input buffer for PaneSend modal
+    pub send_input_buf: String,
+
+    // Tracks which session is selected (for smart pane reset)
+    pub selected_session_id: Option<String>,
+
     // Widget states (RefCell for interior mutability in view())
     pub session_list_state: RefCell<session_list::SessionListState>,
     pub pane_table_state: RefCell<pane_table::PaneTableState>,
@@ -53,6 +62,9 @@ pub struct NtmApp {
     pub escalation_state: RefCell<escalation_inbox::EscalationInboxState>,
     pub toast_queue: RefCell<toast_manager::ToastQueue>,
     pub palette_state: RefCell<command_palette_wrapper::PaletteState>,
+
+    // RPC write channel for fire-and-forget notifications
+    pub rpc_tx: Option<tokio::sync::mpsc::Sender<String>>,
 
     // Daemon message bridge (subscription drains this into the update loop)
     daemon_rx: Arc<Mutex<tokio::sync::mpsc::UnboundedReceiver<Msg>>>,
@@ -74,6 +86,7 @@ impl NtmApp {
             tab: Tab::Dashboard,
             focus: FocusArea::SessionList,
             show_help: false,
+            help_scroll: 0,
 
             sessions: vec![],
             panes: vec![],
@@ -87,6 +100,8 @@ impl NtmApp {
             spinner_frame: 0,
             event_filter: EventFilter::All,
             pending_confirm: None,
+            send_input_buf: String::new(),
+            selected_session_id: None,
 
             session_list_state: RefCell::new(session_list::SessionListState::new()),
             pane_table_state: RefCell::new(pane_table::PaneTableState::new()),
@@ -95,7 +110,32 @@ impl NtmApp {
             toast_queue: RefCell::new(toast_manager::ToastQueue::new()),
             palette_state: RefCell::new(command_palette_wrapper::PaletteState::new()),
 
+            rpc_tx: None,
             daemon_rx: Arc::new(Mutex::new(daemon_rx)),
+        }
+    }
+
+    pub fn set_rpc_tx(&mut self, tx: tokio::sync::mpsc::Sender<String>) {
+        self.rpc_tx = Some(tx);
+    }
+
+    /// Send a fire-and-forget JSON-RPC notification (no id, no response expected).
+    fn fire_rpc(&self, method: &str, params: serde_json::Value) {
+        let Some(tx) = &self.rpc_tx else { return };
+        let notification = json!({
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+        });
+        let json_str = match serde_json::to_string(&notification) {
+            Ok(s) => s,
+            Err(e) => {
+                warn!("fire_rpc serialize error: {e}");
+                return;
+            }
+        };
+        if let Err(e) = tx.blocking_send(json_str) {
+            warn!("fire_rpc send failed: {e}");
         }
     }
 
@@ -134,19 +174,30 @@ impl NtmApp {
                 return Cmd::None;
             }
             KeyCode::Char('p') if key.modifiers.contains(Modifiers::CTRL) => {
-                self.palette_state.borrow_mut().toggle(&self.sessions);
+                self.palette_state.borrow_mut().toggle(&self.sessions, &self.panes);
                 return Cmd::None;
             }
             KeyCode::Char('/') => {
-                self.palette_state.borrow_mut().open(&self.sessions);
+                self.palette_state.borrow_mut().open(&self.sessions, &self.panes);
                 return Cmd::None;
             }
             _ => {}
         }
 
-        // Help overlay captures all other keys
+        // Help overlay: j/k scroll, other keys close
         if self.show_help {
-            self.show_help = false;
+            match key.code {
+                KeyCode::Char('j') | KeyCode::Down => {
+                    self.help_scroll = self.help_scroll.saturating_add(1);
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    self.help_scroll = self.help_scroll.saturating_sub(1);
+                }
+                _ => {
+                    self.show_help = false;
+                    self.help_scroll = 0;
+                }
+            }
             return Cmd::None;
         }
 
@@ -212,17 +263,16 @@ impl NtmApp {
     }
 
     fn handle_session_list_key(&mut self, key: KeyEvent) -> Cmd<Msg> {
-        let len = self.sessions.len();
         let mut state = self.session_list_state.borrow_mut();
         match key.code {
-            KeyCode::Char('j') | KeyCode::Down => state.select_next(len),
-            KeyCode::Char('k') | KeyCode::Up => state.select_prev(),
-            KeyCode::Char('g') => state.select_first(),
-            KeyCode::Char('G') => state.select_last(len),
+            KeyCode::Char('j') | KeyCode::Down => state.select_next_session(),
+            KeyCode::Char('k') | KeyCode::Up => state.select_prev_session(),
+            KeyCode::Char('g') => state.select_first_session(),
+            KeyCode::Char('G') => state.select_last_session(),
             KeyCode::Enter | KeyCode::Char('l') => state.toggle_expand(),
             KeyCode::Char('K') => {
                 // Kill session confirmation
-                if let Some(i) = state.selected() {
+                if let Some(i) = state.selected_session_index() {
                     if let Some(s) = self.sessions.get(i) {
                         drop(state); // release borrow before mutating self
                         self.pending_confirm = Some(ConfirmAction::KillSession {
@@ -241,7 +291,7 @@ impl NtmApp {
         let selected_session = self
             .session_list_state
             .borrow()
-            .selected()
+            .selected_session_index()
             .and_then(|i| self.sessions.get(i).map(|s| s.session_id.clone()));
 
         let pane_count = if let Some(sid) = &selected_session {
@@ -254,6 +304,33 @@ impl NtmApp {
         match key.code {
             KeyCode::Char('j') | KeyCode::Down => state.select_next(pane_count),
             KeyCode::Char('k') | KeyCode::Up => state.select_prev(),
+            KeyCode::Char('s') => {
+                if let Some(sid) = &selected_session {
+                    let session_panes: Vec<&PaneView> = self
+                        .panes
+                        .iter()
+                        .filter(|p| p.session_id == *sid)
+                        .collect();
+                    if let Some(pane_idx) = state.selected() {
+                        if let Some(pane) = session_panes.get(pane_idx) {
+                            let session_name = self
+                                .session_list_state
+                                .borrow()
+                                .selected_session_index()
+                                .and_then(|i| self.sessions.get(i).map(|s| s.name.clone()))
+                                .unwrap_or_default();
+                            let pane_label =
+                                format!("{} #{}", session_name, pane.pane_index);
+                            let pane_id = pane.tmux_pane_id.clone().unwrap_or_else(|| pane.pane_id.clone());
+                            drop(state);
+                            self.pending_confirm = Some(ConfirmAction::PaneSend {
+                                pane_id,
+                                pane_label,
+                            });
+                        }
+                    }
+                }
+            }
             _ => {}
         }
         Cmd::None
@@ -306,23 +383,70 @@ impl NtmApp {
     }
 
     fn handle_confirm_key(&mut self, key: KeyEvent) -> Cmd<Msg> {
-        match key.code {
-            KeyCode::Char('y') | KeyCode::Char('Y') => {
-                if let Some(action) = self.pending_confirm.take() {
-                    match action {
-                        ConfirmAction::KillSession { session_name, .. } => {
+        // Dispatch based on the action type — PaneSend has text input, KillSession is y/n.
+        if let Some(action) = self.pending_confirm.take() {
+            match action {
+                ConfirmAction::KillSession { session_id, session_name } => {
+                    match key.code {
+                        KeyCode::Char('y') | KeyCode::Char('Y') => {
+                            self.fire_rpc("actions.sessionKill", json!({
+                                "sessionId": session_id
+                            }));
                             self.toast_queue.borrow_mut().push(
                                 format!("Session '{session_name}' killed"),
                                 ToastLevel::Info,
                             );
                         }
+                        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Escape => {}
+                        _ => {
+                            // Keep modal open for unrecognized keys
+                            self.pending_confirm = Some(ConfirmAction::KillSession {
+                                session_id,
+                                session_name,
+                            });
+                        }
+                    }
+                }
+                ConfirmAction::PaneSend { pane_id, pane_label } => {
+                    match key.code {
+                        KeyCode::Enter => {
+                            self.fire_rpc("actions.paneSend", json!({
+                                "paneId": pane_id,
+                                "payload": self.send_input_buf,
+                                "enter": true,
+                            }));
+                            self.toast_queue.borrow_mut().push(
+                                format!("Sent to {pane_label}"),
+                                ToastLevel::Success,
+                            );
+                            self.send_input_buf.clear();
+                        }
+                        KeyCode::Escape => {
+                            self.send_input_buf.clear();
+                        }
+                        KeyCode::Backspace => {
+                            self.send_input_buf.pop();
+                            self.pending_confirm = Some(ConfirmAction::PaneSend {
+                                pane_id,
+                                pane_label,
+                            });
+                        }
+                        KeyCode::Char(c) => {
+                            self.send_input_buf.push(c);
+                            self.pending_confirm = Some(ConfirmAction::PaneSend {
+                                pane_id,
+                                pane_label,
+                            });
+                        }
+                        _ => {
+                            self.pending_confirm = Some(ConfirmAction::PaneSend {
+                                pane_id,
+                                pane_label,
+                            });
+                        }
                     }
                 }
             }
-            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Escape => {
-                self.pending_confirm = None;
-            }
-            _ => {}
         }
         Cmd::None
     }
@@ -343,7 +467,7 @@ impl NtmApp {
                 .iter()
                 .position(|s| s.session_id == session_id)
             {
-                self.session_list_state.borrow_mut().list_state.select(Some(idx));
+                self.session_list_state.borrow_mut().select_session_by_index(idx);
                 self.tab = Tab::Sessions;
             }
         } else if let Some(session_id) = action_id.strip_prefix("kill:") {
@@ -351,6 +475,22 @@ impl NtmApp {
                 self.pending_confirm = Some(ConfirmAction::KillSession {
                     session_id: s.session_id.clone(),
                     session_name: s.name.clone(),
+                });
+            }
+        } else if let Some(rest) = action_id.strip_prefix("send:") {
+            // Format: "send:{tmux_pane_id}:{session_name}"
+            if let Some(colon_pos) = rest.find(':') {
+                let pane_id = &rest[..colon_pos];
+                let session_name = &rest[colon_pos + 1..];
+                let pane_index = self
+                    .panes
+                    .iter()
+                    .find(|p| p.tmux_pane_id.as_deref() == Some(pane_id) || p.pane_id == pane_id)
+                    .map(|p| p.pane_index)
+                    .unwrap_or(0);
+                self.pending_confirm = Some(ConfirmAction::PaneSend {
+                    pane_id: pane_id.to_string(),
+                    pane_label: format!("{session_name} #{pane_index}"),
                 });
             }
         }
@@ -368,6 +508,13 @@ impl Model for NtmApp {
     fn update(&mut self, msg: Msg) -> Cmd<Msg> {
         match msg {
             Msg::Term(Event::Key(key)) => self.handle_key(key),
+            Msg::Term(Event::Paste(paste)) => {
+                // Append pasted text when PaneSend modal is open
+                if matches!(self.pending_confirm, Some(ConfirmAction::PaneSend { .. })) {
+                    self.send_input_buf.push_str(&paste.text);
+                }
+                Cmd::None
+            }
             Msg::Term(Event::Resize { .. }) => Cmd::None,
             Msg::Term(_) => Cmd::None,
             Msg::Tick => {
@@ -381,6 +528,37 @@ impl Model for NtmApp {
                 self.events = snap.events;
                 self.stats = snap.stats.summary;
                 self.last_event_id = snap.last_event_id;
+
+                // Auto-select: ensure valid selection
+                let session_count = self.sessions.len();
+                if session_count > 0 {
+                    let mut sl_state = self.session_list_state.borrow_mut();
+                    let current = sl_state.selected_session_index();
+                    let needs_reset = current.is_none() || current.unwrap() >= session_count;
+
+                    // Check if selected session disappeared
+                    let session_gone = if let Some(ref sid) = self.selected_session_id {
+                        !self.sessions.iter().any(|s| s.session_id == *sid)
+                    } else {
+                        false
+                    };
+
+                    if needs_reset || session_gone {
+                        sl_state.list_state.select(Some(0));
+                        drop(sl_state);
+                        self.pane_table_state.borrow_mut().table_state.select(Some(0));
+                        self.selected_session_id = self.sessions.first().map(|s| s.session_id.clone());
+                    } else {
+                        // Track current session
+                        let new_sid = current.and_then(|i| self.sessions.get(i).map(|s| s.session_id.clone()));
+                        drop(sl_state);
+                        if new_sid != self.selected_session_id {
+                            self.selected_session_id = new_sid;
+                            self.pane_table_state.borrow_mut().table_state.select(Some(0));
+                        }
+                    }
+                }
+
                 Cmd::None
             }
             Msg::ConnectionChanged(state) => {
@@ -447,7 +625,8 @@ impl Model for NtmApp {
             .split(area);
 
         // Header: tab bar
-        render_header(frame, rows[0], self.tab);
+        let escalation_count = self.events.iter().filter(|e| e.event_type == "escalation").count();
+        render_header(frame, rows[0], self.tab, escalation_count);
 
         // Content: active tab
         match self.tab {
@@ -466,11 +645,12 @@ impl Model for NtmApp {
             self.session_count(),
             self.tab,
             self.spinner_frame,
+            self.focus,
         );
 
         // Confirmation modal overlay
         if let Some(ref action) = self.pending_confirm {
-            render_confirm_modal(frame, area, action);
+            render_confirm_modal(frame, area, action, &self.send_input_buf);
         }
 
         // Toast overlay
@@ -493,7 +673,7 @@ impl Model for NtmApp {
 
         // Help overlay (on top of everything)
         if self.show_help {
-            screens::help::render(frame, area);
+            screens::help::render(frame, area, self.help_scroll);
         }
     }
 
@@ -536,47 +716,73 @@ impl Subscription<Msg> for DaemonSubscription {
     }
 }
 
-fn render_header(frame: &mut Frame, area: Rect, active_tab: Tab) {
+fn render_header(frame: &mut Frame, area: Rect, active_tab: Tab, escalation_count: usize) {
     let mut header = String::from(" NTM Tracker ");
     header.push_str(&theme::BOX_HORIZONTAL.repeat(2));
     header.push(' ');
 
-    for tab in Tab::all() {
+    for (i, tab) in Tab::all().iter().enumerate() {
+        let num = i + 1;
         if *tab == active_tab {
-            header.push_str(&format!("[{}]", tab.label()));
+            header.push_str(&format!("[{}:{}]", num, tab.label()));
         } else {
-            header.push_str(&format!(" {} ", tab.label()));
+            header.push_str(&format!(" {}:{} ", num, tab.label()));
         }
-        header.push_str(" │ ");
+        if i < 3 {
+            header.push(' ');
+        }
     }
 
-    header.push_str("? ");
-
-    let pad = area.width.saturating_sub(header.len() as u16);
-    header.push_str(&" ".repeat(pad as usize));
+    if escalation_count > 0 {
+        let badge = format!(" \u{25cf} {} ", escalation_count);
+        let used = header.len() + badge.len();
+        let pad = (area.width as usize).saturating_sub(used);
+        header.push_str(&" ".repeat(pad));
+        header.push_str(&badge);
+    } else {
+        let pad = (area.width as usize).saturating_sub(header.len());
+        header.push_str(&" ".repeat(pad));
+    }
 
     let para = Paragraph::new(header).style(Style::new().fg(theme::TEXT_PRIMARY).bg(theme::BG_RAISED));
     para.render(area, frame);
 }
 
-fn render_confirm_modal(frame: &mut Frame, area: Rect, action: &ConfirmAction) {
-    let text = match action {
+fn render_confirm_modal(frame: &mut Frame, area: Rect, action: &ConfirmAction, send_buf: &str) {
+    match action {
         ConfirmAction::KillSession { session_name, .. } => {
-            format!("  Kill session '{session_name}'?  [y/n]")
+            let text = format!("  Kill session '{session_name}'?  [y/n]");
+            let width = (text.len() as u16 + 4).min(area.width.saturating_sub(4));
+            let height = 3u16;
+            let x = area.x + (area.width.saturating_sub(width)) / 2;
+            let y = area.y + (area.height.saturating_sub(height)) / 2;
+            let popup = Rect::new(x, y, width, height);
+
+            let block = theme::panel_block(" Confirm ", true);
+            let para = Paragraph::new(text)
+                .style(Style::new().fg(theme::ERROR).bg(theme::BG_RAISED))
+                .block(block);
+            para.render(popup, frame);
         }
-    };
+        ConfirmAction::PaneSend { pane_label, .. } => {
+            let label_line = format!("  Send to: {pane_label}");
+            let input_line = format!("  > {send_buf}_");
+            let hints_line = "  Enter:send  Esc:cancel".to_string();
+            let text = format!("{label_line}\n{input_line}\n{hints_line}");
 
-    let width = (text.len() as u16 + 4).min(area.width.saturating_sub(4));
-    let height = 3u16;
-    let x = area.x + (area.width.saturating_sub(width)) / 2;
-    let y = area.y + (area.height.saturating_sub(height)) / 2;
-    let popup = Rect::new(x, y, width, height);
+            let width = 44u16.max(input_line.len() as u16 + 4).min(area.width.saturating_sub(4));
+            let height = 5u16;
+            let x = area.x + (area.width.saturating_sub(width)) / 2;
+            let y = area.y + (area.height.saturating_sub(height)) / 2;
+            let popup = Rect::new(x, y, width, height);
 
-    let block = theme::panel_block(" Confirm ", true);
-    let para = Paragraph::new(text)
-        .style(Style::new().fg(theme::ERROR).bg(theme::BG_RAISED))
-        .block(block);
-    para.render(popup, frame);
+            let block = theme::panel_block(" Send to Pane ", true);
+            let para = Paragraph::new(text)
+                .style(Style::new().fg(theme::INFO).bg(theme::BG_RAISED))
+                .block(block);
+            para.render(popup, frame);
+        }
+    }
 }
 
 fn render_toast(frame: &mut Frame, area: Rect, toast: &toast_manager::ToastEntry) {
@@ -638,6 +844,7 @@ mod tests {
             pane_id: pane_id.to_string(),
             session_id: session_id.to_string(),
             status: "active".to_string(),
+            tmux_pane_id: Some(format!("%{}", pane_id.trim_start_matches('p'))),
             ..Default::default()
         }
     }
@@ -687,6 +894,8 @@ mod tests {
         app.last_event_id = 5;
         app.conn_state = ConnState::Connected;
         app.daemon_version = "0.1.0".to_string();
+        // Build row_map so session-aware navigation works in tests
+        app.session_list_state.borrow_mut().build_row_map(&app.sessions, &app.panes);
         app
     }
 
@@ -929,12 +1138,34 @@ mod tests {
     }
 
     #[test]
-    fn test_help_overlay_dismisses_on_any_key() {
+    fn test_help_overlay_j_scrolls_down() {
         let mut app = NtmApp::new();
         app.show_help = true;
         let cmd = app.handle_key(key(KeyCode::Char('j')));
         assert!(matches!(cmd, Cmd::None));
+        assert!(app.show_help); // still open
+        assert_eq!(app.help_scroll, 1);
+    }
+
+    #[test]
+    fn test_help_overlay_k_scrolls_up() {
+        let mut app = NtmApp::new();
+        app.show_help = true;
+        app.help_scroll = 3;
+        app.handle_key(key(KeyCode::Char('k')));
+        assert!(app.show_help);
+        assert_eq!(app.help_scroll, 2);
+    }
+
+    #[test]
+    fn test_help_overlay_dismisses_on_other_key() {
+        let mut app = NtmApp::new();
+        app.show_help = true;
+        app.help_scroll = 5;
+        let cmd = app.handle_key(key(KeyCode::Char('x')));
+        assert!(matches!(cmd, Cmd::None));
         assert!(!app.show_help);
+        assert_eq!(app.help_scroll, 0); // reset on close
     }
 
     #[test]
@@ -973,7 +1204,7 @@ mod tests {
         assert_eq!(app.focus, FocusArea::PaneTable);
 
         app.handle_key(key(KeyCode::Tab));
-        assert_eq!(app.focus, FocusArea::EscalationInbox);
+        assert_eq!(app.focus, FocusArea::EventTimeline);
     }
 
     #[test]
@@ -982,10 +1213,10 @@ mod tests {
         assert_eq!(app.focus, FocusArea::SessionList);
 
         app.handle_key(key(KeyCode::BackTab));
-        assert_eq!(app.focus, FocusArea::EventTimeline);
+        assert_eq!(app.focus, FocusArea::EscalationInbox);
 
         app.handle_key(key(KeyCode::BackTab));
-        assert_eq!(app.focus, FocusArea::EscalationInbox);
+        assert_eq!(app.focus, FocusArea::EventTimeline);
     }
 
     #[test]
@@ -1218,6 +1449,7 @@ mod tests {
         assert_eq!(app.tab, Tab::Dashboard);
         assert_eq!(app.focus, FocusArea::SessionList);
         assert!(!app.show_help);
+        assert_eq!(app.help_scroll, 0);
         assert!(app.sessions.is_empty());
         assert!(app.panes.is_empty());
         assert!(app.events.is_empty());
@@ -1395,5 +1627,242 @@ mod tests {
         app.spinner_frame = usize::MAX;
         app.update(Msg::Tick);
         assert_eq!(app.spinner_frame, 0); // wrapping_add
+    }
+
+    // ========================================================
+    // RPC wiring and PaneSend tests
+    // ========================================================
+
+    #[test]
+    fn test_fire_rpc_with_none_tx_is_noop() {
+        let app = NtmApp::new();
+        assert!(app.rpc_tx.is_none());
+        // Should not panic — just returns silently
+        app.fire_rpc("test.method", serde_json::json!({"key": "val"}));
+    }
+
+    #[test]
+    fn test_set_rpc_tx_stores_sender() {
+        let mut app = NtmApp::new();
+        assert!(app.rpc_tx.is_none());
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        app.set_rpc_tx(tx);
+        assert!(app.rpc_tx.is_some());
+    }
+
+    #[test]
+    fn test_new_has_empty_send_buf() {
+        let app = NtmApp::new();
+        assert!(app.send_input_buf.is_empty());
+    }
+
+    #[test]
+    fn test_pane_send_chars_accumulate() {
+        let mut app = populated_app();
+        app.pending_confirm = Some(ConfirmAction::PaneSend {
+            pane_id: "p1".to_string(),
+            pane_label: "test #0".to_string(),
+        });
+        app.handle_key(key(KeyCode::Char('l')));
+        app.handle_key(key(KeyCode::Char('s')));
+        assert_eq!(app.send_input_buf, "ls");
+        assert!(app.pending_confirm.is_some()); // still open
+    }
+
+    #[test]
+    fn test_pane_send_backspace_removes_char() {
+        let mut app = populated_app();
+        app.send_input_buf = "abc".to_string();
+        app.pending_confirm = Some(ConfirmAction::PaneSend {
+            pane_id: "p1".to_string(),
+            pane_label: "test #0".to_string(),
+        });
+        app.handle_key(key(KeyCode::Backspace));
+        assert_eq!(app.send_input_buf, "ab");
+        assert!(app.pending_confirm.is_some());
+    }
+
+    #[test]
+    fn test_pane_send_backspace_on_empty_is_safe() {
+        let mut app = populated_app();
+        app.pending_confirm = Some(ConfirmAction::PaneSend {
+            pane_id: "p1".to_string(),
+            pane_label: "test #0".to_string(),
+        });
+        app.handle_key(key(KeyCode::Backspace));
+        assert!(app.send_input_buf.is_empty());
+        assert!(app.pending_confirm.is_some());
+    }
+
+    #[test]
+    fn test_pane_send_enter_clears_and_toasts() {
+        let mut app = populated_app();
+        app.send_input_buf = "ls -la".to_string();
+        app.pending_confirm = Some(ConfirmAction::PaneSend {
+            pane_id: "p1".to_string(),
+            pane_label: "project-a #0".to_string(),
+        });
+        // fire_rpc is no-op (rpc_tx is None), but toast + clear should work
+        app.handle_key(key(KeyCode::Enter));
+        assert!(app.pending_confirm.is_none());
+        assert!(app.send_input_buf.is_empty());
+        assert!(!app.toast_queue.borrow().is_empty());
+        let active = app.toast_queue.borrow().active().cloned();
+        assert_eq!(active.unwrap().level, ToastLevel::Success);
+    }
+
+    #[test]
+    fn test_pane_send_escape_cancels() {
+        let mut app = populated_app();
+        app.send_input_buf = "partial".to_string();
+        app.pending_confirm = Some(ConfirmAction::PaneSend {
+            pane_id: "p1".to_string(),
+            pane_label: "test #0".to_string(),
+        });
+        app.handle_key(key(KeyCode::Escape));
+        assert!(app.pending_confirm.is_none());
+        assert!(app.send_input_buf.is_empty());
+        assert!(app.toast_queue.borrow().is_empty()); // no toast on cancel
+    }
+
+    #[test]
+    fn test_pane_send_empty_enter_still_fires() {
+        let mut app = populated_app();
+        app.pending_confirm = Some(ConfirmAction::PaneSend {
+            pane_id: "p1".to_string(),
+            pane_label: "test #0".to_string(),
+        });
+        // Enter with empty buf — sends just Enter to pane
+        app.handle_key(key(KeyCode::Enter));
+        assert!(app.pending_confirm.is_none());
+        assert!(!app.toast_queue.borrow().is_empty());
+    }
+
+    #[test]
+    fn test_kill_confirm_with_no_rpc_tx_still_toasts() {
+        let mut app = populated_app();
+        assert!(app.rpc_tx.is_none());
+        app.pending_confirm = Some(ConfirmAction::KillSession {
+            session_id: "s1".to_string(),
+            session_name: "project-a".to_string(),
+        });
+        app.handle_key(key(KeyCode::Char('y')));
+        assert!(app.pending_confirm.is_none());
+        assert!(!app.toast_queue.borrow().is_empty());
+    }
+
+    #[test]
+    fn test_palette_action_send_opens_pane_send() {
+        let mut app = populated_app();
+        app.handle_palette_action("send:%1:project-a");
+        assert!(app.pending_confirm.is_some());
+        if let Some(ConfirmAction::PaneSend { pane_id, pane_label }) = &app.pending_confirm {
+            assert_eq!(pane_id, "%1");
+            assert!(pane_label.contains("project-a"));
+        } else {
+            panic!("Expected PaneSend confirm");
+        }
+    }
+
+    #[test]
+    fn test_palette_action_send_invalid_format_noop() {
+        let mut app = populated_app();
+        app.handle_palette_action("send:nocolon");
+        assert!(app.pending_confirm.is_none());
+    }
+
+    #[test]
+    fn test_s_key_in_pane_table_opens_send() {
+        let mut app = populated_app();
+        app.focus = FocusArea::PaneTable;
+        app.session_list_state
+            .borrow_mut()
+            .list_state
+            .select(Some(0));
+        app.pane_table_state
+            .borrow_mut()
+            .table_state
+            .select(Some(0));
+        app.handle_key(key(KeyCode::Char('s')));
+        assert!(app.pending_confirm.is_some());
+        if let Some(ConfirmAction::PaneSend { pane_id, .. }) = &app.pending_confirm {
+            assert_eq!(pane_id, "%1"); // tmux_pane_id of first pane
+        } else {
+            panic!("Expected PaneSend");
+        }
+    }
+
+    #[test]
+    fn test_s_key_in_pane_table_no_session_noop() {
+        let mut app = populated_app();
+        app.focus = FocusArea::PaneTable;
+        app.session_list_state
+            .borrow_mut()
+            .list_state
+            .select(None);
+        app.handle_key(key(KeyCode::Char('s')));
+        assert!(app.pending_confirm.is_none());
+    }
+
+    #[test]
+    fn test_s_key_in_pane_table_no_pane_selected_noop() {
+        let mut app = populated_app();
+        app.focus = FocusArea::PaneTable;
+        app.session_list_state
+            .borrow_mut()
+            .list_state
+            .select(Some(0));
+        app.pane_table_state
+            .borrow_mut()
+            .table_state
+            .select(None);
+        app.handle_key(key(KeyCode::Char('s')));
+        assert!(app.pending_confirm.is_none());
+    }
+
+    #[test]
+    fn test_kill_modal_keeps_open_on_random_key() {
+        let mut app = populated_app();
+        app.pending_confirm = Some(ConfirmAction::KillSession {
+            session_id: "s1".to_string(),
+            session_name: "project-a".to_string(),
+        });
+        app.handle_key(key(KeyCode::Char('x')));
+        // Modal should still be open
+        assert!(app.pending_confirm.is_some());
+    }
+
+    #[test]
+    fn test_paste_appends_to_send_buf() {
+        let mut app = populated_app();
+        app.send_input_buf = "ls ".to_string();
+        app.pending_confirm = Some(ConfirmAction::PaneSend {
+            pane_id: "%1".to_string(),
+            pane_label: "test #0".to_string(),
+        });
+        let paste = ftui::PasteEvent::bracketed("-la /tmp");
+        app.update(Msg::Term(Event::Paste(paste)));
+        assert_eq!(app.send_input_buf, "ls -la /tmp");
+        assert!(app.pending_confirm.is_some()); // modal stays open
+    }
+
+    #[test]
+    fn test_paste_ignored_without_send_modal() {
+        let mut app = NtmApp::new();
+        let paste = ftui::PasteEvent::bracketed("injected text");
+        app.update(Msg::Term(Event::Paste(paste)));
+        assert!(app.send_input_buf.is_empty());
+    }
+
+    #[test]
+    fn test_paste_ignored_during_kill_modal() {
+        let mut app = populated_app();
+        app.pending_confirm = Some(ConfirmAction::KillSession {
+            session_id: "s1".to_string(),
+            session_name: "project-a".to_string(),
+        });
+        let paste = ftui::PasteEvent::bracketed("injected text");
+        app.update(Msg::Term(Event::Paste(paste)));
+        assert!(app.send_input_buf.is_empty());
     }
 }

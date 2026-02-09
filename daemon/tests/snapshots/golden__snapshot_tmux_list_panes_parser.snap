@@ -5,6 +5,7 @@ expression: parsed
 [
   {
     "session_id": "$1",
+    "session_name": "mysession",
     "window_id": "@2",
     "pane_id": "%3",
     "pane_index": 0,

@@ -68,6 +68,8 @@ fn populated_app() -> NtmApp {
         active_minutes: 90,
         estimated_tokens: 25000,
     };
+    // Build row_map so session-aware navigation works
+    app.session_list_state.borrow_mut().build_row_map(&app.sessions, &app.panes);
     app
 }
 
@@ -134,8 +136,10 @@ fn test_full_navigation_flow() {
     assert!(!app.show_help);
     logger.step_result(true, "Help overlay toggle works");
 
-    logger.step("Navigate to escalations via Tab");
-    // Currently at PaneTable, need: Tab -> EscalationInbox
+    logger.step("Navigate to event timeline via Tab, then escalations");
+    // Currently at PaneTable, need: Tab -> EventTimeline -> EscalationInbox
+    send_key!(KeyCode::Tab, "Tab");
+    assert_eq!(app.focus, FocusArea::EventTimeline);
     send_key!(KeyCode::Tab, "Tab");
     assert_eq!(app.focus, FocusArea::EscalationInbox);
     send_key!(KeyCode::Char('j'), "j (escalation down)");
@@ -223,12 +227,12 @@ fn test_tab_cycling_wraps() {
     logger.log("  Tab 1: PaneTable");
 
     app.update(key_msg(KeyCode::Tab));
-    assert_eq!(app.focus, FocusArea::EscalationInbox);
-    logger.log("  Tab 2: EscalationInbox");
+    assert_eq!(app.focus, FocusArea::EventTimeline);
+    logger.log("  Tab 2: EventTimeline");
 
     app.update(key_msg(KeyCode::Tab));
-    assert_eq!(app.focus, FocusArea::EventTimeline);
-    logger.log("  Tab 3: EventTimeline");
+    assert_eq!(app.focus, FocusArea::EscalationInbox);
+    logger.log("  Tab 3: EscalationInbox");
 
     app.update(key_msg(KeyCode::Tab));
     assert_eq!(app.focus, FocusArea::SessionList);
@@ -238,9 +242,9 @@ fn test_tab_cycling_wraps() {
 
     logger.step("BackTab cycling (reverse)");
     app.update(key_msg(KeyCode::BackTab));
-    assert_eq!(app.focus, FocusArea::EventTimeline);
-    app.update(key_msg(KeyCode::BackTab));
     assert_eq!(app.focus, FocusArea::EscalationInbox);
+    app.update(key_msg(KeyCode::BackTab));
+    assert_eq!(app.focus, FocusArea::EventTimeline);
     app.update(key_msg(KeyCode::BackTab));
     assert_eq!(app.focus, FocusArea::PaneTable);
     app.update(key_msg(KeyCode::BackTab));
@@ -283,7 +287,7 @@ fn test_navigation_with_empty_data() {
     logger.step("Help toggle with empty data");
     app.update(key_msg(KeyCode::Char('?')));
     assert!(app.show_help);
-    app.update(key_msg(KeyCode::Char('j'))); // dismiss
+    app.update(key_msg(KeyCode::Escape)); // dismiss
     assert!(!app.show_help);
     logger.step_result(true, "Help toggle OK with empty data");
 

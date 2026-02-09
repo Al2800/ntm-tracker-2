@@ -32,7 +32,7 @@ pub fn render(frame: &mut Frame, area: Rect, app: &NtmApp) {
     let selected = app
         .session_list_state
         .borrow()
-        .selected()
+        .selected_session_index()
         .and_then(|i| app.sessions.get(i).cloned());
 
     if let Some(session) = selected {
@@ -85,9 +85,105 @@ pub fn render(frame: &mut Frame, area: Rect, app: &NtmApp) {
         );
     } else {
         let block = theme::panel_block(" Session Detail ", false);
-        let para = Paragraph::new("  Select a session from Dashboard")
+        let para = Paragraph::new("  \u{2190} Select a session from the list")
             .style(theme::muted_style())
             .block(block);
         para.render(area, frame);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::NtmApp;
+    use crate::rpc::types::{PaneView, SessionView};
+    use crate::test_helpers::*;
+    use crate::widgets::session_list::RowKind;
+    use ftui::core::geometry::Rect;
+
+    /// Set up session_list_state so selected_session_index() returns Some(idx).
+    fn select_session(app: &NtmApp, idx: usize) {
+        let mut state = app.session_list_state.borrow_mut();
+        state.row_map = vec![RowKind::Session(idx)];
+        state.list_state.select(Some(0));
+    }
+
+    #[test]
+    fn test_render_empty_sessions_shows_no_active() {
+        test_frame!(pool, frame, 80, 20);
+        let area = Rect::new(0, 0, 80, 20);
+        let app = NtmApp::new();
+        render(&mut frame, area, &app);
+        assert_text_present(&frame.buffer, "No active sessions");
+    }
+
+    #[test]
+    fn test_render_empty_sessions_shows_sessions_title() {
+        test_frame!(pool, frame, 80, 20);
+        let area = Rect::new(0, 0, 80, 20);
+        let app = NtmApp::new();
+        render(&mut frame, area, &app);
+        assert_text_present(&frame.buffer, "Sessions");
+    }
+
+    #[test]
+    fn test_render_sessions_no_selection_shows_select_hint() {
+        test_frame!(pool, frame, 80, 20);
+        let area = Rect::new(0, 0, 80, 20);
+        let mut app = NtmApp::new();
+        app.sessions = vec![SessionView {
+            session_id: "s1".to_string(),
+            name: "my-session".to_string(),
+            status: "active".to_string(),
+            pane_count: 1,
+            source_id: "tmux".to_string(),
+            ..Default::default()
+        }];
+        // No session selected in session_list_state → shows "Select a session" hint
+        render(&mut frame, area, &app);
+        assert_text_present(&frame.buffer, "Select a session");
+    }
+
+    #[test]
+    fn test_render_with_selected_session_shows_detail() {
+        test_frame!(pool, frame, 100, 25);
+        let area = Rect::new(0, 0, 100, 25);
+        let mut app = NtmApp::new();
+        app.sessions = vec![SessionView {
+            session_id: "s1".to_string(),
+            name: "work-session".to_string(),
+            status: "active".to_string(),
+            pane_count: 2,
+            source_id: "tmux".to_string(),
+            ..Default::default()
+        }];
+        app.panes = vec![PaneView {
+            pane_id: "p1".to_string(),
+            session_id: "s1".to_string(),
+            status: "active".to_string(),
+            ..Default::default()
+        }];
+        select_session(&app, 0);
+        render(&mut frame, area, &app);
+        assert_text_present(&frame.buffer, "Session Detail");
+        assert_text_present(&frame.buffer, "work-session");
+    }
+
+    #[test]
+    fn test_render_selected_session_shows_status() {
+        test_frame!(pool, frame, 100, 25);
+        let area = Rect::new(0, 0, 100, 25);
+        let mut app = NtmApp::new();
+        app.sessions = vec![SessionView {
+            session_id: "s1".to_string(),
+            name: "test-sess".to_string(),
+            status: "active".to_string(),
+            pane_count: 1,
+            source_id: "tmux".to_string(),
+            ..Default::default()
+        }];
+        select_session(&app, 0);
+        render(&mut frame, area, &app);
+        assert_text_present(&frame.buffer, "active");
     }
 }

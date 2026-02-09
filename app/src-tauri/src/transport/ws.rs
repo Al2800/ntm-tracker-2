@@ -31,7 +31,7 @@ impl WsTransport {
             .map_err(|err| format!("Failed to serialize JSON-RPC request: {err}"))?;
 
         let (mut socket, _) =
-            connect(&self.url).map_err(|err| format!("WS connect failed: {err}"))?;
+            connect(self.url.as_str()).map_err(|err| format!("WS connect failed: {err}"))?;
 
         socket
             .send(Message::text(payload))
