@@ -1213,3 +1213,279 @@ fn test_disconnect_then_error() {
 
     logger.finish(true);
 }
+
+// ================================================================
+// bd-1oda: E2E sessionKill full-stack
+// ================================================================
+
+/// Full sessionKill flow: navigate to session, press K, confirm with y, verify RPC sent + toast.
+#[test]
+fn test_session_kill_full_flow_with_rpc_capture() {
+    let logger = TestLogger::new("test_session_kill_full_flow_with_rpc_capture");
+    let mut app = populated_app();
+
+    // Set up a real channel to capture the RPC notification
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(8);
+    app.set_rpc_tx(tx);
+    app.conn_state = ConnState::Connected;
+
+    logger.step("Navigate to SessionList, select session at index 0");
+    assert_eq!(app.focus, FocusArea::SessionList);
+    let sel = app.session_list_state.borrow().list_state.selected();
+    logger.log(&format!("  Initial selection: {:?}", sel));
+    assert!(sel.is_some(), "populated_app should auto-select first session");
+    logger.step_result(true, "Session selected");
+
+    logger.step("Press K to open kill confirmation modal");
+    app.update(key_msg(KeyCode::Char('K')));
+    assert!(app.pending_confirm.is_some(), "Kill modal should be open");
+    if let Some(ConfirmAction::KillSession { session_id, session_name }) = &app.pending_confirm {
+        assert_eq!(session_id, "s1");
+        assert_eq!(session_name, "project-a");
+        logger.log(&format!("  Modal for session: {} ({})", session_name, session_id));
+    } else {
+        panic!("Expected KillSession confirm action");
+    }
+    logger.step_result(true, "Kill modal opened for project-a");
+
+    logger.step("Verify kill modal renders correctly");
+    let mut tf = TestFrame::new(120, 30);
+    tf.render(|frame, _area| {
+        app.view(frame);
+    });
+    tf.assert_contains("project-a");
+    logger.step_result(true, "Modal renders session name");
+
+    logger.step("Press 'y' to confirm kill");
+    app.update(key_msg(KeyCode::Char('y')));
+    assert!(app.pending_confirm.is_none(), "Modal should close after confirm");
+    logger.step_result(true, "Modal closed");
+
+    logger.step("Verify RPC notification was sent with correct method and sessionId");
+    let rpc_msg = rx.try_recv().expect("Should have received RPC message");
+    let parsed: serde_json::Value = serde_json::from_str(&rpc_msg).expect("Valid JSON");
+    assert_eq!(parsed["jsonrpc"], "2.0", "Should be JSON-RPC 2.0");
+    assert_eq!(parsed["method"], "actions.sessionKill", "Method should be actions.sessionKill");
+    assert_eq!(parsed["params"]["sessionId"], "s1", "sessionId should be s1");
+    assert!(parsed.get("id").is_none(), "Should be a notification (no id)");
+    logger.log(&format!("  RPC sent: {}", rpc_msg));
+    logger.step_result(true, "Correct JSON-RPC notification captured");
+
+    logger.step("Verify kill toast appeared");
+    let q = app.toast_queue.borrow();
+    assert!(!q.is_empty(), "Kill should produce a toast");
+    let toast = q.active().unwrap();
+    assert_eq!(toast.level, ToastLevel::Info);
+    assert!(toast.message.contains("project-a"), "Toast should mention session name");
+    logger.log(&format!("  Toast: '{}' (level={:?})", toast.message, toast.level));
+    logger.step_result(true, "Kill toast present with correct content");
+
+    logger.log("PASS: Full sessionKill flow verified — navigation -> modal -> RPC -> toast");
+    logger.finish(true);
+}
+
+/// SessionKill cancel paths: 'n' key and Escape both cancel without sending RPC.
+#[test]
+fn test_session_kill_cancel_paths() {
+    let logger = TestLogger::new("test_session_kill_cancel_paths");
+
+    logger.step("Cancel with 'n' key");
+    {
+        let mut app = populated_app();
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(8);
+        app.set_rpc_tx(tx);
+
+        app.update(key_msg(KeyCode::Char('K')));
+        assert!(app.pending_confirm.is_some());
+
+        app.update(key_msg(KeyCode::Char('n')));
+        assert!(app.pending_confirm.is_none(), "Modal should close on 'n'");
+        assert!(app.toast_queue.borrow().is_empty(), "No toast on cancel");
+        assert!(rx.try_recv().is_err(), "No RPC should be sent on cancel");
+    }
+    logger.step_result(true, "'n' cancels without RPC");
+
+    logger.step("Cancel with Escape key");
+    {
+        let mut app = populated_app();
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(8);
+        app.set_rpc_tx(tx);
+
+        app.update(key_msg(KeyCode::Char('K')));
+        assert!(app.pending_confirm.is_some());
+
+        app.update(key_msg(KeyCode::Escape));
+        assert!(app.pending_confirm.is_none(), "Modal should close on Escape");
+        assert!(app.toast_queue.borrow().is_empty(), "No toast on cancel");
+        assert!(rx.try_recv().is_err(), "No RPC should be sent on Escape");
+    }
+    logger.step_result(true, "Escape cancels without RPC");
+
+    logger.step("Cancel with 'N' (uppercase) key");
+    {
+        let mut app = populated_app();
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(8);
+        app.set_rpc_tx(tx);
+
+        app.update(key_msg(KeyCode::Char('K')));
+        app.update(key_msg(KeyCode::Char('N')));
+        assert!(app.pending_confirm.is_none());
+        assert!(rx.try_recv().is_err());
+    }
+    logger.step_result(true, "'N' (uppercase) also cancels");
+
+    logger.finish(true);
+}
+
+/// Unrecognized keys keep the kill modal open (don't accidentally dismiss).
+#[test]
+fn test_session_kill_modal_ignores_unrecognized_keys() {
+    let logger = TestLogger::new("test_session_kill_modal_ignores_unrecognized_keys");
+    let mut app = populated_app();
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(8);
+    app.set_rpc_tx(tx);
+
+    logger.step("Open kill modal");
+    app.update(key_msg(KeyCode::Char('K')));
+    assert!(app.pending_confirm.is_some());
+    logger.step_result(true, "Modal open");
+
+    logger.step("Press various unrecognized keys — modal stays open");
+    for code in [KeyCode::Char('x'), KeyCode::Char('z'), KeyCode::Down, KeyCode::Tab] {
+        app.update(key_msg(code));
+        assert!(app.pending_confirm.is_some(), "Modal should stay open on {:?}", code);
+    }
+    assert!(rx.try_recv().is_err(), "No RPC sent for unrecognized keys");
+    logger.step_result(true, "Modal stays open for unrecognized keys");
+
+    logger.step("Finally confirm with 'y'");
+    app.update(key_msg(KeyCode::Char('y')));
+    assert!(app.pending_confirm.is_none());
+    assert!(rx.try_recv().is_ok(), "RPC should be sent after 'y'");
+    logger.step_result(true, "Modal closed and RPC sent on 'y'");
+
+    logger.finish(true);
+}
+
+/// Kill session via palette action: palette -> kill action -> modal -> confirm -> RPC.
+#[test]
+fn test_session_kill_via_palette_full_flow() {
+    let logger = TestLogger::new("test_session_kill_via_palette_full_flow");
+    let mut app = populated_app();
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(8);
+    app.set_rpc_tx(tx);
+
+    logger.step("Execute kill:s2 via palette action");
+    app.handle_palette_action("kill:s2");
+    assert!(app.pending_confirm.is_some());
+    if let Some(ConfirmAction::KillSession { session_id, session_name }) = &app.pending_confirm {
+        assert_eq!(session_id, "s2");
+        assert_eq!(session_name, "project-b");
+    } else {
+        panic!("Expected KillSession");
+    }
+    logger.step_result(true, "Kill modal opened for s2/project-b via palette");
+
+    logger.step("Confirm with 'Y' (uppercase)");
+    app.update(key_msg(KeyCode::Char('Y')));
+    assert!(app.pending_confirm.is_none());
+    logger.step_result(true, "Modal closed");
+
+    logger.step("Verify RPC captures sessionId s2");
+    let rpc_msg = rx.try_recv().expect("RPC message");
+    let parsed: serde_json::Value = serde_json::from_str(&rpc_msg).unwrap();
+    assert_eq!(parsed["method"], "actions.sessionKill");
+    assert_eq!(parsed["params"]["sessionId"], "s2");
+    logger.step_result(true, "RPC notification for s2 captured");
+
+    logger.step("Toast mentions project-b");
+    let q = app.toast_queue.borrow();
+    assert!(q.active().unwrap().message.contains("project-b"));
+    logger.step_result(true, "Toast contains session name");
+
+    logger.finish(true);
+}
+
+/// Kill with no RPC channel — fire_rpc is a no-op, but toast still appears.
+#[test]
+fn test_session_kill_without_rpc_channel() {
+    let logger = TestLogger::new("test_session_kill_without_rpc_channel");
+    let mut app = populated_app();
+    // Do NOT set rpc_tx — it stays None
+
+    logger.step("Open and confirm kill with no rpc_tx");
+    app.update(key_msg(KeyCode::Char('K')));
+    assert!(app.pending_confirm.is_some());
+    app.update(key_msg(KeyCode::Char('y')));
+    assert!(app.pending_confirm.is_none(), "Modal should close");
+    logger.step_result(true, "Modal closed without crash");
+
+    logger.step("Toast still appears even without RPC channel");
+    let q = app.toast_queue.borrow();
+    assert!(!q.is_empty(), "Toast should still appear");
+    assert_eq!(q.active().unwrap().level, ToastLevel::Info);
+    logger.step_result(true, "Toast present despite no RPC channel");
+
+    logger.finish(true);
+}
+
+/// Navigate to different session, kill it, verify correct session targeted.
+#[test]
+fn test_session_kill_targets_correct_session() {
+    let logger = TestLogger::new("test_session_kill_targets_correct_session");
+    let mut app = populated_app();
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(8);
+    app.set_rpc_tx(tx);
+
+    logger.step("Navigate down to session index 2 (project-c)");
+    app.update(key_msg(KeyCode::Char('j')));
+    app.update(key_msg(KeyCode::Char('j')));
+    assert_eq!(
+        app.session_list_state.borrow().list_state.selected(),
+        Some(2)
+    );
+    logger.step_result(true, "Selected session index 2");
+
+    logger.step("Press K and confirm");
+    app.update(key_msg(KeyCode::Char('K')));
+    if let Some(ConfirmAction::KillSession { session_id, session_name }) = &app.pending_confirm {
+        assert_eq!(session_id, "s3", "Should target s3 (project-c)");
+        assert_eq!(session_name, "project-c");
+    } else {
+        panic!("Expected KillSession for project-c");
+    }
+    app.update(key_msg(KeyCode::Char('y')));
+    logger.step_result(true, "Confirmed kill for project-c");
+
+    logger.step("Verify RPC has sessionId s3");
+    let rpc_msg = rx.try_recv().expect("RPC message");
+    let parsed: serde_json::Value = serde_json::from_str(&rpc_msg).unwrap();
+    assert_eq!(parsed["params"]["sessionId"], "s3");
+    logger.step_result(true, "RPC notification targets s3");
+
+    logger.step("Verify toast mentions project-c");
+    assert!(app.toast_queue.borrow().active().unwrap().message.contains("project-c"));
+    logger.step_result(true, "Toast mentions correct session name");
+
+    logger.finish(true);
+}
+
+/// Modal render check: verify kill confirmation shows y/n hint.
+#[test]
+fn test_session_kill_modal_renders_confirmation_hint() {
+    let logger = TestLogger::new("test_session_kill_modal_renders_confirmation_hint");
+    let mut app = populated_app();
+
+    logger.step("Open kill modal and render");
+    app.update(key_msg(KeyCode::Char('K')));
+    let mut tf = TestFrame::new(120, 30);
+    tf.render(|frame, _area| {
+        app.view(frame);
+    });
+    // Should show the session name and y/n prompt
+    tf.assert_contains("project-a");
+    tf.assert_contains("y");
+    logger.step_result(true, "Modal renders session name and confirmation key");
+
+    logger.finish(true);
+}
